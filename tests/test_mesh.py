@@ -7,6 +7,7 @@ from topo_shadow_box.core.mesh import (
     create_road_strip,
     create_solid_polygon,
     generate_feature_meshes,
+    generate_terrain_mesh,
     triangulate_polygon,
 )
 from topo_shadow_box.state import Bounds, ElevationData
@@ -175,3 +176,52 @@ class TestFeatureMeshes:
         meshes = generate_feature_meshes(
             features, self.elevation, self.bounds, self.transform, 1.5, "square")
         assert len(meshes) <= 200
+
+
+class TestTerrainMeshShapeAware:
+    def setup_method(self):
+        self.grid = np.random.uniform(90, 110, (20, 20))
+        self.lats = np.linspace(40.0, 40.01, 20)
+        self.lons = np.linspace(-74.0, -73.99, 20)
+        self.bounds = Bounds(north=40.01, south=40.0, east=-73.99, west=-74.0)
+        self.elevation = ElevationData(
+            grid=self.grid, lats=self.lats, lons=self.lons,
+            resolution=20, min_elevation=90.0, max_elevation=110.0,
+        )
+        self.transform = GeoToModelTransform(self.bounds, 200.0)
+
+    def test_square_terrain(self):
+        mesh = generate_terrain_mesh(
+            self.elevation, self.bounds, self.transform, 1.5, 10.0, "square")
+        assert len(mesh["vertices"]) > 0
+        assert len(mesh["faces"]) > 0
+
+    def test_circle_terrain_valid_indices(self):
+        mesh = generate_terrain_mesh(
+            self.elevation, self.bounds, self.transform, 1.5, 10.0, "circle")
+        n_verts = len(mesh["vertices"])
+        for face in mesh["faces"]:
+            for idx in face:
+                assert 0 <= idx < n_verts
+
+    def test_circle_has_more_verts_than_square(self):
+        sq = generate_terrain_mesh(
+            self.elevation, self.bounds, self.transform, 1.5, 10.0, "square")
+        ci = generate_terrain_mesh(
+            self.elevation, self.bounds, self.transform, 1.5, 10.0, "circle")
+        # Circle adds 360 wall segments (720 verts) + center
+        assert len(ci["vertices"]) > len(sq["vertices"])
+
+    def test_hexagon_terrain_valid_indices(self):
+        mesh = generate_terrain_mesh(
+            self.elevation, self.bounds, self.transform, 1.5, 10.0, "hexagon")
+        n_verts = len(mesh["vertices"])
+        for face in mesh["faces"]:
+            for idx in face:
+                assert 0 <= idx < n_verts
+
+    def test_hexagon_terrain_has_faces(self):
+        mesh = generate_terrain_mesh(
+            self.elevation, self.bounds, self.transform, 1.5, 10.0, "hexagon")
+        assert len(mesh["vertices"]) > 0
+        assert len(mesh["faces"]) > 0

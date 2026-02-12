@@ -1,11 +1,14 @@
 """Mesh generation for terrain, features, and GPX tracks."""
 
+from collections import defaultdict
+
 import numpy as np
 from scipy.spatial import cKDTree
 
 from ..state import Bounds, ElevationData
 from .coords import GeoToModelTransform
 from .building_shapes import BuildingShapeGenerator
+from .shape_clipper import HexagonClipper
 
 
 def _elevation_normalization(grid: np.ndarray) -> tuple[float, float]:
@@ -49,6 +52,60 @@ def _sample_elevation(
     )
 
 
+def _interpolate_boundary_elevation(angle: float, boundary_data: list) -> float:
+    """Interpolate elevation at a given angle from sorted boundary vertices.
+
+    Args:
+        angle: Target angle in radians (-pi to pi).
+        boundary_data: List of tuples (angle, elevation, ...) sorted by angle.
+
+    Returns:
+        Interpolated elevation value.
+    """
+    n = len(boundary_data)
+    if n == 0:
+        return 0.0
+
+    # Find bracketing boundary vertices
+    upper_idx = 0
+    lower_idx = n - 1
+    for i in range(n):
+        if boundary_data[i][0] >= angle:
+            upper_idx = i
+            lower_idx = (i - 1) % n
+            break
+    else:
+        # Angle is past all boundary angles, wrap around
+        upper_idx = 0
+        lower_idx = n - 1
+
+    lower_angle = boundary_data[lower_idx][0]
+    lower_elev = boundary_data[lower_idx][1]
+    upper_angle = boundary_data[upper_idx][0]
+    upper_elev = boundary_data[upper_idx][1]
+
+    # Handle wraparound
+    if upper_angle < lower_angle:
+        if angle < 0:
+            upper_angle_adj = upper_angle
+            lower_angle_adj = lower_angle - 2 * np.pi
+        else:
+            upper_angle_adj = upper_angle + 2 * np.pi
+            lower_angle_adj = lower_angle
+    else:
+        upper_angle_adj = upper_angle
+        lower_angle_adj = lower_angle
+
+    # Linear interpolation
+    span = upper_angle_adj - lower_angle_adj
+    if abs(span) < 1e-6:
+        return lower_elev
+
+    t = (angle - lower_angle_adj) / span
+    t = max(0.0, min(1.0, t))
+    return lower_elev + t * (upper_elev - lower_elev)
+
+
 def generate_terrain_mesh(
     elevation: ElevationData,
     bounds: Bounds,
@@ -58,6 +115,11 @@ def generate_terrain_mesh(
     shape: str = "square",
 ) -> dict:
     """Generate terrain mesh from elevation grid.
+
+    Produces shape-aware bases:
+    - square/rectangle: rectangular side walls and flat bottom
+    - circle: smooth 360-segment circular wall with interpolated contour
+    - hexagon: boundary-edge-based wall following terrain contour
 
     Returns dict with 'vertices' and 'faces' (lists of lists).
     """
@@ -84,24 +146,22 @@ def generate_terrain_mesh(
     n = len(top_verts)
 
     # Shape clipping mask
+    cx = transform.model_width_x / 2
+    cz = transform.model_width_z / 2
     if shape == "circle":
-        cx = transform.model_width_x / 2
-        cz = transform.model_width_z / 2
         radius = min(transform.model_width_x, transform.model_width_z) / 2
         dx = top_verts[:, 0] - cx
         dz = top_verts[:, 2] - cz
         inside = (dx * dx + dz * dz) <= radius * radius
+    elif shape == "hexagon":
+        radius = min(transform.model_width_x, transform.model_width_z) / 2
+        hex_clipper = HexagonClipper(cx, cz, radius)
+        inside = hex_clipper.is_inside(top_verts[:, 0], top_verts[:, 2])
     else:
         inside = np.ones(n, dtype=bool)
 
-    # Bottom vertices (same X,Z but Y = -base_height)
-    bottom_verts = top_verts.copy()
-    bottom_verts[:, 1] = -base_height_mm
-
-    all_verts = np.vstack([top_verts, bottom_verts])
-
-    faces = []
-    # Top surface (terrain) - CCW from above
+    # Top surface faces (terrain) - CCW from above
+    terrain_faces = []
     for i in range(rows - 1):
         for j in range(cols - 1):
             idx = i * cols + j
@@ -109,9 +169,41 @@ def generate_terrain_mesh(
             idx_d = idx + cols
             idx_dr = idx + cols + 1
             if inside[idx] and inside[idx_d] and inside[idx_r]:
-                faces.append([idx, idx_d, idx_r])
+                terrain_faces.append([idx, idx_d, idx_r])
             if inside[idx_r] and inside[idx_d] and inside[idx_dr]:
-                faces.append([idx_r, idx_d, idx_dr])
+                terrain_faces.append([idx_r, idx_d, idx_dr])
+
+    if shape == "circle":
+        return _generate_circle_terrain(
+            top_verts, terrain_faces, rows, cols, cx, cz, radius,
+            inside, base_height_mm,
+        )
+    elif shape == "hexagon":
+        return _generate_hexagon_terrain(
+            top_verts, terrain_faces, rows, cols, cx, cz,
+            inside, base_height_mm, hex_clipper,
+        )
+    else:
+        return _generate_square_terrain(
+            top_verts, terrain_faces, rows, cols, n, base_height_mm,
+        )
+
+
+def _generate_square_terrain(
+    top_verts: np.ndarray,
+    terrain_faces: list,
+    rows: int,
+    cols: int,
+    n: int,
+    base_height_mm: float,
+) -> dict:
+    """Generate rectangular base with side walls for square/rectangle shapes."""
+    # Bottom vertices (same X,Z but Y = -base_height)
+    bottom_verts = top_verts.copy()
+    bottom_verts[:, 1] = -base_height_mm
+    all_verts = np.vstack([top_verts, bottom_verts])
+
+    faces = list(terrain_faces)
 
     # Side walls
     # West wall (j=0)
@@ -156,6 +248,246 @@ def generate_terrain_mesh(
             idx = n + i * cols + j
             faces.append([idx, idx + 1, idx + cols])
             faces.append([idx + 1, idx + cols + 1, idx + cols])
+
+    return {
+        "vertices": all_verts.tolist(),
+        "faces": faces,
+    }
+
+
+def _generate_circle_terrain(
+    top_verts: np.ndarray,
+    terrain_faces: list,
+    rows: int,
+    cols: int,
+    cx: float,
+    cz: float,
+    radius: float,
+    inside: np.ndarray,
+    base_height_mm: float,
+) -> dict:
+    """Generate smooth circular base with 360-segment wall.
+
+    Finds boundary vertices (inside with an outside neighbor), interpolates
+    elevation around the circle, creates a smooth wall, and stretches boundary
+    terrain vertices outward to close gaps.
+    """
+    top_verts = top_verts.copy()
+    n = len(top_verts)
+    num_segments = 360
+
+    # Find boundary vertices and their angles for elevation interpolation
+    # A boundary vertex is inside the circle AND has at least one grid neighbor outside
+    boundary_data = []  # (angle, elevation, x, z, vertex_index)
+    for i in range(rows):
+        for j in range(cols):
+            idx = i * cols + j
+            if not inside[idx]:
+                continue
+            neighbors = []
+            if i > 0:
+                neighbors.append((i - 1) * cols + j)
+            if i < rows - 1:
+                neighbors.append((i + 1) * cols + j)
+            if j > 0:
+                neighbors.append(i * cols + j - 1)
+            if j < cols - 1:
+                neighbors.append(i * cols + j + 1)
+            for nb_idx in neighbors:
+                if not inside[nb_idx]:
+                    v = top_verts[idx]
+                    angle = np.arctan2(v[2] - cz, v[0] - cx)
+                    boundary_data.append((angle, v[1], v[0], v[2], idx))
+                    break
+
+    # Sort by angle for interpolation
+    boundary_data.sort(key=lambda x: x[0])
+
+    # Move ALL boundary vertices outward to exactly match the wall circle
+    # This stretches the terrain mesh to close the gap with the smooth wall
+    for data in boundary_data:
+        idx = data[4]
+        v = top_verts[idx]
+        dx = v[0] - cx
+        dz = v[2] - cz
+        dist = np.sqrt(dx * dx + dz * dz)
+        if dist > 0:
+            scale = radius / dist
+            top_verts[idx][0] = cx + dx * scale
+            top_verts[idx][2] = cz + dz * scale
+
+    # Vertex layout for wall/base:
+    # n .. n+359:          outer top circle (wall top edge on exact circle)
+    # n+360 .. n+719:      outer bottom circle (wall base)
+    # n+720:               center bottom vertex
+    outer_top_start = n
+    outer_bottom_start = n + num_segments
+    center_bottom_idx = n + 2 * num_segments
+
+    wall_verts = []
+    for i in range(num_segments):
+        angle = 2 * np.pi * i / num_segments - np.pi  # -pi to pi
+
+        cos_a = np.cos(angle)
+        sin_a = np.sin(angle)
+
+        outer_x = cx + radius * cos_a
+        outer_z = cz + radius * sin_a
+
+        # Interpolate elevation from boundary vertices
+        elev = _interpolate_boundary_elevation(angle, boundary_data)
+
+        # Top follows terrain contour
+        wall_verts.append([outer_x, elev, outer_z])
+
+    for i in range(num_segments):
+        angle = 2 * np.pi * i / num_segments - np.pi
+        cos_a = np.cos(angle)
+        sin_a = np.sin(angle)
+        outer_x = cx + radius * cos_a
+        outer_z = cz + radius * sin_a
+        # Bottom at base
+        wall_verts.append([outer_x, -base_height_mm, outer_z])
+
+    # Center bottom vertex
+    wall_verts.append([cx, -base_height_mm, cz])
+
+    all_verts = np.vstack([top_verts, np.array(wall_verts)])
+
+    faces = list(terrain_faces)
+
+    # Outer wall faces (CCW when viewed from outside)
+    for i in range(num_segments):
+        next_i = (i + 1) % num_segments
+        ot0 = outer_top_start + i
+        ot1 = outer_top_start + next_i
+        ob0 = outer_bottom_start + i
+        ob1 = outer_bottom_start + next_i
+        faces.append([ot0, ob0, ot1])
+        faces.append([ot1, ob0, ob1])
+
+    # Bottom face: fan triangulation from center (CCW from below)
+    for i in range(num_segments):
+        next_i = (i + 1) % num_segments
+        ob0 = outer_bottom_start + i
+        ob1 = outer_bottom_start + next_i
+        faces.append([center_bottom_idx, ob1, ob0])
+
+    return {
+        "vertices": all_verts.tolist(),
+        "faces": faces,
+    }
+
+
+def _generate_hexagon_terrain(
+    top_verts: np.ndarray,
+    terrain_faces: list,
+    rows: int,
+    cols: int,
+    cx: float,
+    cz: float,
+    inside: np.ndarray,
+    base_height_mm: float,
+    hex_clipper: HexagonClipper,
+) -> dict:
+    """Generate hexagonal base using boundary edge detection from terrain faces.
+
+    Finds edges referenced exactly once (boundary edges), walks the boundary
+    loop, projects vertices to the hexagon edge, and generates wall + bottom.
+    """
+    top_verts = top_verts.copy()
+    n = len(top_verts)
+
+    # Find boundary edges from actual terrain faces
+    # An edge that appears in exactly one face is a boundary edge
+    edge_count: dict[tuple[int, int], int] = defaultdict(int)
+    for face in terrain_faces:
+        v0, v1, v2 = int(face[0]), int(face[1]), int(face[2])
+        for a, b in [(v0, v1), (v1, v2), (v2, v0)]:
+            edge = (min(a, b), max(a, b))
+            edge_count[edge] += 1
+
+    boundary_edge_list = [e for e, c in edge_count.items() if c == 1]
+
+    if not boundary_edge_list:
+        # Fallback: no boundary edges, return terrain-only mesh
+        return {
+            "vertices": top_verts.tolist(),
+            "faces": terrain_faces,
+        }
+
+    # Build adjacency from boundary edges to walk the loop
+    adjacency: dict[int, list[int]] = defaultdict(list)
+    for v1, v2 in boundary_edge_list:
+        adjacency[v1].append(v2)
+        adjacency[v2].append(v1)
+
+    # Walk the boundary loop starting from any vertex
+    start = boundary_edge_list[0][0]
+    boundary_indices = [start]
+    visited = {start}
+
+    current = start
+    while True:
+        neighbors = adjacency[current]
+        next_v = None
+        for nb in neighbors:
+            if nb not in visited:
+                next_v = nb
+                break
+        if next_v is None:
+            break
+        boundary_indices.append(next_v)
+        visited.add(next_v)
+        current = next_v
+
+    if len(boundary_indices) < 3:
+        return {
+            "vertices": top_verts.tolist(),
+            "faces": terrain_faces,
+        }
+
+    # Project boundary vertices to the hexagon edge
+    for idx in boundary_indices:
+        v = top_verts[idx]
+        projected = hex_clipper.project_to_boundary(v[0], v[2])
+        if projected:
+            top_verts[idx][0] = projected[0]
+            top_verts[idx][2] = projected[1]
+
+    num_boundary = len(boundary_indices)
+
+    # Create base vertices (one below each boundary vertex at base height)
+    base_verts = []
+    for idx in boundary_indices:
+        v = top_verts[idx]
+        base_verts.append([v[0], -base_height_mm, v[2]])
+
+    # Center bottom vertex for fan triangulation
+    base_verts.append([cx, -base_height_mm, cz])
+    center_bottom_idx = n + num_boundary
+
+    all_verts = np.vstack([top_verts, np.array(base_verts)])
+
+    faces = list(terrain_faces)
+
+    # Wall faces connecting terrain boundary to base vertices (CCW from outside)
+    for i in range(num_boundary):
+        next_i = (i + 1) % num_boundary
+        terrain_top = boundary_indices[i]
+        terrain_top_next = boundary_indices[next_i]
+        base_bottom = n + i
+        base_bottom_next = n + next_i
+
+        faces.append([terrain_top, base_bottom, terrain_top_next])
+        faces.append([terrain_top_next, base_bottom, base_bottom_next])
+
+    # Bottom face: fan from center (CCW from below)
+    for i in range(num_boundary):
+        next_i = (i + 1) % num_boundary
+        base_bottom = n + i
+        base_bottom_next = n + next_i
+        faces.append([center_bottom_idx, base_bottom_next, base_bottom])
 
     return {
         "vertices": all_verts.tolist(),
