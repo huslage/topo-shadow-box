@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Topo Shadow Box - Preview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #e0e0e0; font-family: system-ui, sans-serif; overflow: hidden; }
+  #info {
+    position: absolute; top: 10px; left: 10px; z-index: 10;
+    background: rgba(0,0,0,0.7); padding: 12px 16px; border-radius: 8px;
+    font-size: 13px; line-height: 1.6;
+  }
+  #info h3 { margin-bottom: 6px; color: #82aaff; }
+  #controls {
+    position: absolute; top: 10px; right: 10px; z-index: 10;
+    background: rgba(0,0,0,0.7); padding: 12px 16px; border-radius: 8px;
+    font-size: 13px;
+  }
+  #controls label { display: block; margin: 4px 0; cursor: pointer; }
+  #controls input[type="checkbox"] { margin-right: 6px; }
+  #status {
+    position: absolute; bottom: 10px; left: 10px; z-index: 10;
+    background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 6px;
+    font-size: 12px; color: #888;
+  }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="info">
+  <h3>Topo Shadow Box</h3>
+  <div id="mesh-info">Waiting for model data...</div>
+</div>
+<div id="controls">
+  <strong>Layers</strong>
+  <div id="layer-toggles"></div>
+</div>
+<div id="status">Connecting...</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// Scene setup
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2e);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 10000);
+camera.position.set(150, 200, 250);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.target.set(100, 0, 100);
+controls.update();
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0x404060, 0.8);
+scene.add(ambientLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+dirLight.position.set(200, 300, 100);
+dirLight.castShadow = true;
+scene.add(dirLight);
+const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
+fillLight.position.set(-100, 100, -100);
+scene.add(fillLight);
+
+// Grid
+const grid = new THREE.GridHelper(400, 40, 0x333355, 0x222244);
+grid.position.y = -50;
+scene.add(grid);
+
+// Mesh groups by type
+const meshGroups = {};
+
+function hexToThreeColor(hex) {
+  return new THREE.Color(hex);
+}
+
+function buildMesh(meshData) {
+  const geometry = new THREE.BufferGeometry();
+  const vertices = new Float32Array(meshData.vertices.flat());
+  geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+
+  const indices = meshData.faces.flat();
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+
+  const material = new THREE.MeshPhongMaterial({
+    color: hexToThreeColor(meshData.color),
+    flatShading: true,
+    side: THREE.DoubleSide,
+  });
+
+  return new THREE.Mesh(geometry, material);
+}
+
+function updateScene(data) {
+  // Remove old meshes
+  for (const [type, group] of Object.entries(meshGroups)) {
+    scene.remove(group);
+  }
+
+  const togglesDiv = document.getElementById('layer-toggles');
+  togglesDiv.innerHTML = '';
+  let totalVerts = 0;
+  let totalFaces = 0;
+
+  for (const meshData of data.meshes) {
+    const mesh = buildMesh(meshData);
+    const group = new THREE.Group();
+    group.add(mesh);
+    group.name = meshData.type;
+    scene.add(group);
+    meshGroups[meshData.type] = group;
+
+    totalVerts += meshData.vertices.length;
+    totalFaces += meshData.faces.length;
+
+    // Layer toggle
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = true;
+    cb.addEventListener('change', () => { group.visible = cb.checked; });
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(meshData.name || meshData.type));
+    togglesDiv.appendChild(label);
+  }
+
+  // Auto-center camera
+  const box = new THREE.Box3();
+  for (const group of Object.values(meshGroups)) {
+    box.expandByObject(group);
+  }
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  controls.target.copy(center);
+  camera.position.set(center.x + size.x, center.y + size.y * 1.5, center.z + size.z);
+  controls.update();
+
+  document.getElementById('mesh-info').innerHTML =
+    `Meshes: ${data.meshes.length}<br>` +
+    `Vertices: ${totalVerts.toLocaleString()}<br>` +
+    `Faces: ${totalFaces.toLocaleString()}`;
+}
+
+// WebSocket connection
+function connectWS() {
+  const ws = new WebSocket('ws://localhost:3334');
+  ws.onopen = () => {
+    document.getElementById('status').textContent = 'Connected';
+  };
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      updateScene(data);
+      document.getElementById('status').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    } catch (e) {
+      console.error('Parse error:', e);
+    }
+  };
+  ws.onclose = () => {
+    document.getElementById('status').textContent = 'Disconnected - reconnecting...';
+    setTimeout(connectWS, 2000);
+  };
+  ws.onerror = () => {
+    document.getElementById('status').textContent = 'Connection error';
+  };
+}
+connectWS();
+
+// Render loop
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+// Resize handler
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>

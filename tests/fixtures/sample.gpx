@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="test">
+  <trk>
+    <name>Sample Trail</name>
+    <trkseg>
+      <trkpt lat="49.4500" lon="-123.4500"><ele>100</ele></trkpt>
+      <trkpt lat="49.4510" lon="-123.4490"><ele>120</ele></trkpt>
+      <trkpt lat="49.4520" lon="-123.4480"><ele>150</ele></trkpt>
+      <trkpt lat="49.4530" lon="-123.4470"><ele>180</ele></trkpt>
+      <trkpt lat="49.4540" lon="-123.4460"><ele>200</ele></trkpt>
+      <trkpt lat="49.4550" lon="-123.4450"><ele>220</ele></trkpt>
+      <trkpt lat="49.4560" lon="-123.4440"><ele>190</ele></trkpt>
+      <trkpt lat="49.4570" lon="-123.4430"><ele>160</ele></trkpt>
+      <trkpt lat="49.4580" lon="-123.4420"><ele>130</ele></trkpt>
+      <trkpt lat="49.4590" lon="-123.4410"><ele>110</ele></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

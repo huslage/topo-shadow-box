@@ -1,0 +1,109 @@
+"""Model configuration tools: set_model_params, set_frame_params, set_colors."""
+
+from mcp.server.fastmcp import FastMCP
+
+from ..state import state
+
+
+def register_model_tools(mcp: FastMCP):
+
+    @mcp.tool()
+    def set_model_params(
+        width_mm: float | None = None,
+        vertical_scale: float | None = None,
+        base_height_mm: float | None = None,
+        shape: str | None = None,
+    ) -> str:
+        """Configure the shadow box model dimensions.
+
+        Args:
+            width_mm: Model width in millimeters (default 200)
+            vertical_scale: Vertical exaggeration factor (default 1.5)
+            base_height_mm: Base platform height in mm (default 10)
+            shape: Model shape: square, circle, rectangle, hexagon (default square)
+        """
+        p = state.model_params
+        if width_mm is not None:
+            p.width_mm = width_mm
+        if vertical_scale is not None:
+            p.vertical_scale = vertical_scale
+        if base_height_mm is not None:
+            p.base_height_mm = base_height_mm
+        if shape is not None:
+            if shape not in ("square", "circle", "rectangle", "hexagon"):
+                return f"Error: Invalid shape '{shape}'. Use: square, circle, rectangle, hexagon."
+            p.shape = shape
+
+        # Clear meshes since params changed
+        state.terrain_mesh = None
+        state.feature_meshes = []
+        state.frame_mesh = None
+
+        return (
+            f"Model params: {p.width_mm}mm wide, vertical_scale={p.vertical_scale}, "
+            f"base={p.base_height_mm}mm, shape={p.shape}"
+        )
+
+    @mcp.tool()
+    def set_frame_params(
+        frame_width_mm: float | None = None,
+        frame_depth_mm: float | None = None,
+        wall_thickness_mm: float | None = None,
+    ) -> str:
+        """Configure the shadow box frame dimensions.
+
+        Args:
+            frame_width_mm: Width of the frame border (default 10mm)
+            frame_depth_mm: Total depth/height of the frame (default 30mm)
+            wall_thickness_mm: Thickness of frame walls (default 2mm)
+        """
+        f = state.frame_params
+        if frame_width_mm is not None:
+            f.frame_width_mm = frame_width_mm
+        if frame_depth_mm is not None:
+            f.frame_depth_mm = frame_depth_mm
+        if wall_thickness_mm is not None:
+            f.wall_thickness_mm = wall_thickness_mm
+
+        state.frame_mesh = None
+
+        return (
+            f"Frame params: width={f.frame_width_mm}mm, depth={f.frame_depth_mm}mm, "
+            f"wall={f.wall_thickness_mm}mm"
+        )
+
+    @mcp.tool()
+    def set_colors(
+        terrain: str | None = None,
+        water: str | None = None,
+        roads: str | None = None,
+        buildings: str | None = None,
+        gpx_track: str | None = None,
+        frame: str | None = None,
+        map_insert: str | None = None,
+    ) -> str:
+        """Set colors for multi-material export. All colors are hex strings (e.g. '#FF0000').
+
+        Args:
+            terrain: Terrain color (default #228B22 ForestGreen)
+            water: Water color (default #4682B4 SteelBlue)
+            roads: Road color (default #696969 DimGray)
+            buildings: Building color (default #A9A9A9 DarkGray)
+            gpx_track: GPX track color (default #FF0000 Red)
+            frame: Frame color (default #8B4513 SaddleBrown)
+            map_insert: Map insert plate color (default #FFFFFF White)
+        """
+        c = state.colors
+        for name, value in [
+            ("terrain", terrain), ("water", water), ("roads", roads),
+            ("buildings", buildings), ("gpx_track", gpx_track),
+            ("frame", frame), ("map_insert", map_insert),
+        ]:
+            if value is not None:
+                # Validate hex color
+                v = value.lstrip("#")
+                if len(v) != 6 or not all(ch in "0123456789abcdefABCDEF" for ch in v):
+                    return f"Error: Invalid hex color '{value}' for {name}."
+                setattr(c, name, f"#{v.upper()}")
+
+        return f"Colors: {c.as_dict()}"

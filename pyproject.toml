@@ -1,0 +1,24 @@
+[project]
+name = "topo-shadow-box"
+version = "0.1.0"
+description = "MCP server for generating 3D-printed shadow boxes with topographical terrain"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp[cli]>=1.0",
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "gpxpy>=1.6",
+    "httpx>=0.24",
+    "Pillow>=10.0",
+    "websockets>=12.0",
+]
+
+[project.scripts]
+topo-shadow-box = "topo_shadow_box.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/topo_shadow_box"]
