@@ -6,8 +6,11 @@ import pytest
 from topo_shadow_box.core.mesh import (
     create_road_strip,
     create_solid_polygon,
+    generate_feature_meshes,
     triangulate_polygon,
 )
+from topo_shadow_box.state import Bounds, ElevationData
+from topo_shadow_box.core.coords import GeoToModelTransform
 
 
 class TestCreateRoadStrip:
@@ -118,3 +121,57 @@ class TestCreateSolidPolygon:
         points = np.array([[0, 5, 0], [1, 5, 0]])
         mesh = create_solid_polygon(points, thickness=1.0)
         assert mesh["vertices"] == []
+
+
+class TestFeatureMeshes:
+    def setup_method(self):
+        self.grid = np.ones((10, 10)) * 100.0
+        self.lats = np.linspace(40.0, 40.01, 10)
+        self.lons = np.linspace(-74.0, -73.99, 10)
+        self.bounds = Bounds(north=40.01, south=40.0, east=-73.99, west=-74.0)
+        self.elevation = ElevationData(
+            grid=self.grid, lats=self.lats, lons=self.lons,
+            resolution=10, min_elevation=100.0, max_elevation=100.0,
+        )
+        self.transform = GeoToModelTransform(self.bounds, 200.0)
+
+    def test_road_is_watertight(self):
+        features = {"roads": [{"coordinates": [
+            {"lat": 40.005, "lon": -73.995}, {"lat": 40.005, "lon": -73.993}
+        ], "name": "Test Road"}]}
+        meshes = generate_feature_meshes(
+            features, self.elevation, self.bounds, self.transform, 1.5, "square")
+        assert len(meshes) == 1
+        assert len(meshes[0]["vertices"]) >= 8
+        assert len(meshes[0]["faces"]) >= 12
+
+    def test_water_is_watertight(self):
+        features = {"water": [{"coordinates": [
+            {"lat": 40.003, "lon": -73.997}, {"lat": 40.007, "lon": -73.997},
+            {"lat": 40.007, "lon": -73.993}, {"lat": 40.003, "lon": -73.993}
+        ], "name": "Test Lake"}]}
+        meshes = generate_feature_meshes(
+            features, self.elevation, self.bounds, self.transform, 1.5, "square")
+        assert len(meshes) == 1
+        assert len(meshes[0]["vertices"]) == 8
+        assert len(meshes[0]["faces"]) == 12
+
+    def test_building_shape_aware(self):
+        features = {"buildings": [{"coordinates": [
+            {"lat": 40.005, "lon": -73.996}, {"lat": 40.006, "lon": -73.996},
+            {"lat": 40.006, "lon": -73.995}, {"lat": 40.005, "lon": -73.995}
+        ], "name": "Church", "height": 20.0,
+           "tags": {"amenity": "place_of_worship", "religion": "christian"}}]}
+        meshes = generate_feature_meshes(
+            features, self.elevation, self.bounds, self.transform, 1.5, "square")
+        assert len(meshes) == 1
+        assert len(meshes[0]["vertices"]) == 17  # steeple
+
+    def test_feature_limits(self):
+        features = {"roads": [
+            {"coordinates": [{"lat": 40.005, "lon": -73.995}, {"lat": 40.005, "lon": -73.994}], "name": f"Road {i}"}
+            for i in range(250)
+        ]}
+        meshes = generate_feature_meshes(
+            features, self.elevation, self.bounds, self.transform, 1.5, "square")
+        assert len(meshes) <= 200

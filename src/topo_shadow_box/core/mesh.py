@@ -5,6 +5,7 @@ from scipy.spatial import cKDTree
 
 from ..state import Bounds, ElevationData
 from .coords import GeoToModelTransform
+from .building_shapes import BuildingShapeGenerator
 
 
 def _elevation_normalization(grid: np.ndarray) -> tuple[float, float]:
@@ -182,23 +183,23 @@ def generate_feature_meshes(
     meshes = []
 
     # Roads: extruded strips following terrain
-    for road in features.get("roads", []):
+    for road in features.get("roads", [])[:200]:
         road_mesh = _generate_road_mesh(
             road, elevation, transform, min_elev, elev_range, vertical_scale, size_scale,
         )
         if road_mesh:
             meshes.append(road_mesh)
 
-    # Water: flat polygons at water level
-    for water in features.get("water", []):
+    # Water: solid polygons at water level
+    for water in features.get("water", [])[:50]:
         water_mesh = _generate_water_mesh(
             water, elevation, transform, min_elev, elev_range, vertical_scale, size_scale,
         )
         if water_mesh:
             meshes.append(water_mesh)
 
-    # Buildings: extruded footprints
-    for building in features.get("buildings", []):
+    # Buildings: shape-aware extruded footprints
+    for building in features.get("buildings", [])[:150]:
         building_mesh = _generate_building_mesh(
             building, elevation, transform, min_elev, elev_range, vertical_scale, size_scale,
         )
@@ -212,58 +213,37 @@ def _generate_road_mesh(
     road: dict, elevation: ElevationData, transform: GeoToModelTransform,
     min_elev: float, elev_range: float, vertical_scale: float, size_scale: float,
 ) -> dict | None:
-    """Generate a road as a flat ribbon following the terrain."""
+    """Generate a road as a watertight strip following the terrain."""
     coords = road.get("coordinates", [])
     if len(coords) < 2:
         return None
 
-    road_width_mm = 1.0 * size_scale  # 1mm at 200mm model
     road_height_offset = 0.2 * size_scale
+    road_relief = max(road_height_offset, 0.6 * size_scale)
 
-    vertices = []
-    faces = []
-
-    for i, coord in enumerate(coords):
+    # Convert coordinates to model space with elevation sampling
+    points = []
+    for coord in coords:
         x, z = transform.geo_to_model(coord["lat"], coord["lon"])
         elev = _sample_elevation(coord["lat"], coord["lon"], elevation)
         y = transform.elevation_to_y(elev, min_elev, elev_range, vertical_scale, size_scale)
-        y += road_height_offset
+        y += road_relief
+        points.append([x, y, z])
 
-        # Compute perpendicular direction for road width
-        if i < len(coords) - 1:
-            next_c = coords[i + 1]
-            nx, nz = transform.geo_to_model(next_c["lat"], next_c["lon"])
-            dx, dz = nx - x, nz - z
-        else:
-            prev_c = coords[i - 1]
-            px, pz = transform.geo_to_model(prev_c["lat"], prev_c["lon"])
-            dx, dz = x - px, z - pz
+    points = np.array(points)
 
-        length = (dx * dx + dz * dz) ** 0.5
-        if length < 1e-10:
-            continue
+    road_width = 1.0 * size_scale
+    road_thickness = max(0.9 * size_scale, road_relief)
 
-        # Perpendicular vector
-        px = -dz / length * road_width_mm / 2
-        pz = dx / length * road_width_mm / 2
-
-        vi = len(vertices)
-        vertices.append([x + px, y, z + pz])
-        vertices.append([x - px, y, z - pz])
-
-        if i > 0 and vi >= 2:
-            # Connect to previous segment
-            faces.append([vi - 2, vi, vi + 1])
-            faces.append([vi - 2, vi + 1, vi - 1])
-
-    if len(vertices) < 4:
+    result = create_road_strip(points, width=road_width, thickness=road_thickness)
+    if not result["vertices"]:
         return None
 
     return {
         "name": road.get("name", "Road"),
         "type": "roads",
-        "vertices": vertices,
-        "faces": faces,
+        "vertices": result["vertices"],
+        "faces": result["faces"],
     }
 
 
@@ -271,36 +251,39 @@ def _generate_water_mesh(
     water: dict, elevation: ElevationData, transform: GeoToModelTransform,
     min_elev: float, elev_range: float, vertical_scale: float, size_scale: float,
 ) -> dict | None:
-    """Generate a water body as a flat polygon."""
+    """Generate a water body as a watertight solid polygon."""
     coords = water.get("coordinates", [])
     if len(coords) < 3:
         return None
 
-    # Find average elevation for water surface
+    # Compute average perimeter elevation
     elevs = []
-    points_2d = []
+    xz_points = []
     for coord in coords:
         x, z = transform.geo_to_model(coord["lat"], coord["lon"])
         elev = _sample_elevation(coord["lat"], coord["lon"], elevation)
         elevs.append(elev)
-        points_2d.append((x, z))
+        xz_points.append((x, z))
 
     avg_elev = sum(elevs) / len(elevs)
-    y = transform.elevation_to_y(avg_elev, min_elev, elev_range, vertical_scale, size_scale)
-    y -= 0.1 * size_scale  # Slightly below terrain
+    water_y_base = transform.elevation_to_y(avg_elev, min_elev, elev_range, vertical_scale, size_scale)
 
-    vertices = [[p[0], y, p[1]] for p in points_2d]
+    water_relief = max(0.6 * size_scale, 0.5 * size_scale)  # = 0.6 * size_scale
+    water_y = max(0.7 * size_scale, water_y_base + water_relief)
+    water_thickness = max(1.2 * size_scale, 2.0 * water_relief)
 
-    # Simple fan triangulation from first vertex
-    faces = []
-    for i in range(1, len(vertices) - 1):
-        faces.append([0, i, i + 1])
+    # Build numpy array of [x, water_y, z] points
+    points = np.array([[p[0], water_y, p[1]] for p in xz_points])
+
+    result = create_solid_polygon(points, thickness=water_thickness)
+    if not result["vertices"]:
+        return None
 
     return {
         "name": water.get("name", "Water"),
         "type": "water",
-        "vertices": vertices,
-        "faces": faces,
+        "vertices": result["vertices"],
+        "faces": result["faces"],
     }
 
 
@@ -308,47 +291,56 @@ def _generate_building_mesh(
     building: dict, elevation: ElevationData, transform: GeoToModelTransform,
     min_elev: float, elev_range: float, vertical_scale: float, size_scale: float,
 ) -> dict | None:
-    """Generate a building as an extruded footprint."""
+    """Generate a building using BuildingShapeGenerator for shape variety."""
     coords = building.get("coordinates", [])
     if len(coords) < 3:
         return None
 
-    height_m = building.get("height", 10.0)
-    height_mm = height_m * 0.1 * size_scale  # Scale building height
+    # Get bounding box from coordinates
+    lats = [c["lat"] for c in coords]
+    lons = [c["lon"] for c in coords]
+    min_lat, max_lat = min(lats), max(lats)
+    min_lon, max_lon = min(lons), max(lons)
 
-    # Compute footprint vertices at ground level
-    ground_verts = []
-    for coord in coords:
-        x, z = transform.geo_to_model(coord["lat"], coord["lon"])
-        elev = _sample_elevation(coord["lat"], coord["lon"], elevation)
-        y = transform.elevation_to_y(elev, min_elev, elev_range, vertical_scale, size_scale)
-        ground_verts.append([x, y, z])
+    # Convert to model space
+    x1, z1 = transform.geo_to_model(max_lat, min_lon)  # north-west corner
+    x2, z2 = transform.geo_to_model(min_lat, max_lon)  # south-east corner
 
-    n = len(ground_verts)
-    # Roof vertices
-    roof_verts = [[v[0], v[1] + height_mm, v[2]] for v in ground_verts]
+    # Enforce minimum footprint (1.2mm)
+    min_size = 1.2
+    if abs(x2 - x1) < min_size:
+        cx = (x1 + x2) / 2
+        x1 = cx - min_size / 2
+        x2 = cx + min_size / 2
+    if abs(z2 - z1) < min_size:
+        cz = (z1 + z2) / 2
+        z1 = cz - min_size / 2
+        z2 = cz + min_size / 2
 
-    vertices = ground_verts + roof_verts
-    faces = []
+    # Sample elevation at center for base_y
+    center_lat = (min_lat + max_lat) / 2
+    center_lon = (min_lon + max_lon) / 2
+    center_elev = _sample_elevation(center_lat, center_lon, elevation)
+    base_y = transform.elevation_to_y(center_elev, min_elev, elev_range, vertical_scale, size_scale)
 
-    # Roof (fan triangulation, CCW from above)
-    for i in range(1, n - 1):
-        faces.append([n + 0, n + i, n + i + 1])
+    # Compute height
+    height_scale = 1.0
+    height_mm = building.get("height", 8.0) * height_scale * 0.15 * size_scale
+    height_mm = max(height_mm, min_size)  # Minimum 1.2mm
 
-    # Walls
-    for i in range(n):
-        j = (i + 1) % n
-        gi, gj = i, j
-        ri, rj = n + i, n + j
-        # CCW from outside
-        faces.append([gi, gj, rj])
-        faces.append([gi, rj, ri])
+    # Determine building shape from tags
+    tags = building.get("tags", {})
+    gen = BuildingShapeGenerator()
+    shape_type = gen.determine_building_shape(tags)
+
+    # Generate the mesh
+    result = gen.generate_building_mesh(x1, x2, base_y, base_y + height_mm, z1, z2, shape_type)
 
     return {
         "name": building.get("name", "Building"),
         "type": "buildings",
-        "vertices": vertices,
-        "faces": faces,
+        "vertices": result["vertices"],
+        "faces": result["faces"],
     }
 
 
@@ -359,12 +351,14 @@ def generate_gpx_track_mesh(
     transform: GeoToModelTransform,
     vertical_scale: float = 1.5,
 ) -> dict | None:
-    """Generate a GPX track as a ribbon mesh above the terrain."""
+    """Generate a GPX track as a watertight strip above the terrain."""
     min_elev, elev_range = _elevation_normalization(elevation.grid)
     model_width = max(transform.model_width_x, transform.model_width_z)
     size_scale = model_width / 200.0
-    track_width = 1.5 * size_scale
-    track_height_offset = 0.5 * size_scale
+
+    gpx_relief = max(0.8 * size_scale, 0.3 * size_scale)  # = 0.8 * size_scale
+    gpx_thickness = max(1.2 * size_scale, 2.0 * gpx_relief)
+    gpx_width = 2.5 * size_scale
 
     all_vertices = []
     all_faces = []
@@ -374,8 +368,19 @@ def generate_gpx_track_mesh(
         if len(points) < 2:
             continue
 
-        base_vi = len(all_vertices)
-        for i, pt in enumerate(points):
+        # Sample points: only take every Nth point
+        sample_rate = max(1, len(points) // 500)
+        sampled = points[::sample_rate]
+        # Always include the last point
+        if sampled[-1] is not points[-1]:
+            sampled.append(points[-1])
+
+        if len(sampled) < 2:
+            continue
+
+        # Build numpy array of sampled [x, y, z] points
+        track_points = []
+        for pt in sampled:
             x, z = transform.geo_to_model(pt["lat"], pt["lon"])
 
             # Use GPX elevation if available, otherwise sample from DEM
@@ -385,36 +390,20 @@ def generate_gpx_track_mesh(
                 elev = _sample_elevation(pt["lat"], pt["lon"], elevation)
 
             y = transform.elevation_to_y(elev, min_elev, elev_range, vertical_scale, size_scale)
-            y += track_height_offset
+            y += gpx_relief
+            track_points.append([x, y, z])
 
-            # Perpendicular for ribbon width
-            if i < len(points) - 1:
-                npt = points[i + 1]
-                nx, nz = transform.geo_to_model(npt["lat"], npt["lon"])
-                dx, dz = nx - x, nz - z
-            else:
-                ppt = points[i - 1]
-                px, pz = transform.geo_to_model(ppt["lat"], ppt["lon"])
-                dx, dz = x - px, z - pz
+        track_points = np.array(track_points)
 
-            length = (dx * dx + dz * dz) ** 0.5
-            if length < 1e-10:
-                # Use previous direction or skip
-                if i > 0:
-                    all_vertices.append(all_vertices[-2][:])
-                    all_vertices.append(all_vertices[-2][:])
-                continue
+        result = create_road_strip(track_points, width=gpx_width, thickness=gpx_thickness)
+        if not result["vertices"]:
+            continue
 
-            perp_x = -dz / length * track_width / 2
-            perp_z = dx / length * track_width / 2
-
-            all_vertices.append([x + perp_x, y, z + perp_z])
-            all_vertices.append([x - perp_x, y, z - perp_z])
-
-            vi = len(all_vertices) - 2
-            if vi >= base_vi + 2:
-                all_faces.append([vi - 2, vi, vi + 1])
-                all_faces.append([vi - 2, vi + 1, vi - 1])
+        # Offset face indices for merged mesh
+        base_vi = len(all_vertices)
+        all_vertices.extend(result["vertices"])
+        for face in result["faces"]:
+            all_faces.append([f + base_vi for f in face])
 
     if not all_vertices:
         return None
