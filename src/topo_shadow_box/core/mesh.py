@@ -16,11 +16,22 @@ from .shape_clipper import (
 )
 
 
-def _elevation_normalization(grid: np.ndarray) -> tuple[float, float]:
-    """Compute min elevation and range for normalization."""
+def _elevation_normalization(grid: np.ndarray, use_percentile: bool = True) -> tuple[float, float]:
+    """Compute min elevation and range for normalization.
+
+    When use_percentile is True and grid has >100 elements, uses 2nd-98th
+    percentile to clip outliers, preserving local terrain relief.
+    """
     finite = grid[np.isfinite(grid)]
     if finite.size == 0:
         return 0.0, 1.0
+
+    if use_percentile and finite.size > 100:
+        p_low = float(np.percentile(finite, 2.0))
+        p_high = float(np.percentile(finite, 98.0))
+        if p_high > p_low and (p_high - p_low) >= 1.0:
+            return p_low, p_high - p_low
+
     raw_min = float(np.min(finite))
     raw_max = float(np.max(finite))
     if raw_max <= raw_min:

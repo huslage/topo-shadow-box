@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from topo_shadow_box.core.mesh import (
+    _elevation_normalization,
     create_road_strip,
     create_solid_polygon,
     generate_feature_meshes,
@@ -344,3 +345,35 @@ class TestFeatureClipping:
             tracks, self.elevation, self.bounds, self.transform, 1.5, shape="circle")
         assert result is not None
         assert len(result["vertices"]) > 0
+
+
+class TestElevationNormalization:
+    """Tests for percentile-based elevation normalization."""
+
+    def test_basic(self):
+        grid = np.array([[100, 200], [150, 250]])
+        min_e, rng = _elevation_normalization(grid)
+        assert min_e == 100.0
+        assert rng == 150.0
+
+    def test_percentile_clips_outliers(self):
+        grid = np.random.uniform(100, 110, (100, 100))
+        grid[0, 0] = 0.0
+        grid[99, 99] = 500.0
+        min_e, rng = _elevation_normalization(grid, use_percentile=True)
+        assert min_e > 0.0
+        assert min_e + rng < 500.0
+
+    def test_flat_terrain(self):
+        grid = np.ones((10, 10)) * 100.0
+        min_e, rng = _elevation_normalization(grid)
+        assert min_e == 100.0
+        assert rng == 1.0
+
+    def test_percentile_disabled(self):
+        grid = np.random.uniform(100, 110, (100, 100))
+        grid[0, 0] = 0.0
+        grid[99, 99] = 500.0
+        min_e, rng = _elevation_normalization(grid, use_percentile=False)
+        assert min_e == 0.0
+        assert abs(rng - 500.0) < 0.1
