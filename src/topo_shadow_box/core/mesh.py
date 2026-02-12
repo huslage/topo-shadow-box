@@ -1,7 +1,6 @@
 """Mesh generation for terrain, features, and GPX tracks."""
 
 import numpy as np
-from scipy import interpolate as sci_interpolate
 
 from ..state import Bounds, ElevationData
 from .coords import GeoToModelTransform
@@ -66,58 +65,10 @@ def generate_terrain_mesh(
     rows, cols = grid.shape
 
     min_elev, elev_range = _elevation_normalization(grid)
-    size_scale = transform.scale_factor * (bounds.lat_range if bounds.lat_range > 0 else 1.0) / 200.0
-    # Simpler: model_width / 200 for consistent scaling
     model_width = max(transform.model_width_x, transform.model_width_z)
     size_scale = model_width / 200.0
 
-    vertices = []
-    for i in range(rows):
-        for j in range(cols):
-            x, z = transform.geo_to_model(lats[i], lons[j])
-            y = transform.elevation_to_y(
-                float(grid[i, j]), min_elev, elev_range, vertical_scale, size_scale,
-            )
-            vertices.append([x, y, z])
-
-    vertices = np.array(vertices)
-
-    # Shape clipping mask
-    if shape == "circle":
-        cx = transform.model_width_x / 2
-        cz = transform.model_width_z / 2
-        radius = min(transform.model_width_x, transform.model_width_z) / 2
-        dx = vertices[:, 0] - cx
-        dz = vertices[:, 2] - cz
-        inside = (dx * dx + dz * dz) <= radius * radius
-    else:
-        inside = np.ones(len(vertices), dtype=bool)
-
-    # Generate faces (two triangles per quad, CCW from above)
-    faces = []
-    for i in range(rows - 1):
-        for j in range(cols - 1):
-            idx = i * cols + j
-            idx_r = idx + 1
-            idx_d = idx + cols
-            idx_dr = idx + cols + 1
-
-            if inside[idx] and inside[idx_d] and inside[idx_r]:
-                faces.append([idx, idx_d, idx_r])
-            if inside[idx_r] and inside[idx_d] and inside[idx_dr]:
-                faces.append([idx_r, idx_d, idx_dr])
-
-    # Add watertight base
-    base_verts, base_faces = _generate_base(vertices, base_height_mm, rows, cols, inside)
-    n_top = len(vertices)
-    vertices = np.vstack([vertices, base_verts])
-    offset_base_faces = base_faces + n_top
-    # Base faces reference both top (original) and bottom (offset) vertices
-    # We need to fix the base faces that reference top vertices
-    all_faces = faces + _build_base_faces(n_top, rows, cols, inside, base_height_mm, vertices)
-
-    # Simpler: use the proven pattern from topo3d
-    # Rebuild with proper base
+    # Build top vertices
     vertices_list = []
     for i in range(rows):
         for j in range(cols):
@@ -129,6 +80,17 @@ def generate_terrain_mesh(
 
     top_verts = np.array(vertices_list)
     n = len(top_verts)
+
+    # Shape clipping mask
+    if shape == "circle":
+        cx = transform.model_width_x / 2
+        cz = transform.model_width_z / 2
+        radius = min(transform.model_width_x, transform.model_width_z) / 2
+        dx = top_verts[:, 0] - cx
+        dz = top_verts[:, 2] - cz
+        inside = (dx * dx + dz * dz) <= radius * radius
+    else:
+        inside = np.ones(n, dtype=bool)
 
     # Bottom vertices (same X,Z but Y = -base_height)
     bottom_verts = top_verts.copy()
@@ -198,17 +160,6 @@ def generate_terrain_mesh(
         "faces": faces,
     }
 
-
-def _generate_base(vertices, base_height, rows, cols, inside):
-    """Placeholder - actual base generation is inline above."""
-    bottom = vertices.copy()
-    bottom[:, 1] = -base_height
-    return bottom, np.array([]).reshape(0, 3).astype(int)
-
-
-def _build_base_faces(n_top, rows, cols, inside, base_height, vertices):
-    """Placeholder - actual base faces are built inline above."""
-    return []
 
 
 def generate_feature_meshes(
@@ -472,4 +423,110 @@ def generate_gpx_track_mesh(
         "faces": all_faces,
         "name": "GPX Track",
         "type": "gpx_track",
+    }
+
+
+def create_road_strip(centerline, width=2.0, thickness=0.3):
+    """Create a 3D-printable road strip with thickness along a centerline.
+
+    Creates a box-like extrusion that's watertight for 3D printing.
+    Vertex layout per point: 0=top-left, 1=top-right, 2=bottom-left, 3=bottom-right
+
+    Args:
+        centerline: List of [x, y, z] points defining the road center.
+        width: Width of the road strip in mm.
+        thickness: Vertical thickness of the strip in mm.
+
+    Returns:
+        Dict with 'vertices' (list of [x,y,z]) and 'faces' (list of [i,j,k]).
+    """
+    if len(centerline) < 2:
+        return {"vertices": [], "faces": []}
+
+    # Remove duplicate consecutive points
+    clean_centerline = [centerline[0]]
+    for i in range(1, len(centerline)):
+        if not np.allclose(centerline[i], centerline[i - 1], atol=1e-6):
+            clean_centerline.append(centerline[i])
+    centerline = np.array(clean_centerline)
+
+    if len(centerline) < 2:
+        return {"vertices": [], "faces": []}
+
+    vertices = []
+    faces = []
+
+    # Generate vertices for top and bottom surfaces
+    for i, point in enumerate(centerline):
+        if i == 0:
+            direction = centerline[i + 1] - centerline[i]
+        elif i == len(centerline) - 1:
+            direction = centerline[i] - centerline[i - 1]
+        else:
+            direction = centerline[i + 1] - centerline[i - 1]
+
+        # Normalize in XZ plane (Y is up)
+        length = np.linalg.norm([direction[0], direction[2]])
+        if length < 1e-6:
+            # Degenerate direction, use previous or default
+            direction = np.array([1.0, 0.0, 0.0])
+        else:
+            direction = direction / length
+
+        # Perpendicular in XZ plane (horizontal) - pointing left when facing direction
+        perpendicular = np.array([-direction[2], 0, direction[0]])
+
+        # Create 4 vertices per point: top-left, top-right, bottom-left, bottom-right
+        half_width = width / 2
+        top_left = point + perpendicular * half_width
+        top_right = point - perpendicular * half_width
+        bottom_left = np.array([top_left[0], top_left[1] - thickness, top_left[2]])
+        bottom_right = np.array([top_right[0], top_right[1] - thickness, top_right[2]])
+
+        vertices.extend([
+            top_left.tolist(),
+            top_right.tolist(),
+            bottom_left.tolist(),
+            bottom_right.tolist(),
+        ])
+
+    n_points = len(centerline)
+
+    # Create faces for each segment with consistent outward-facing winding
+    # Indices: TL=0, TR=1, BL=2, BR=3 (per point)
+    for i in range(n_points - 1):
+        curr = i * 4          # Current point base index
+        next_pt = (i + 1) * 4  # Next point base index
+
+        # Current: TL=curr+0, TR=curr+1, BL=curr+2, BR=curr+3
+        # Next:    TL=next+0, TR=next+1, BL=next+2, BR=next+3
+
+        # Top face (normal pointing up +Y) - CCW when viewed from above
+        faces.append([curr + 0, curr + 1, next_pt + 1])
+        faces.append([curr + 0, next_pt + 1, next_pt + 0])
+
+        # Bottom face (normal pointing down -Y) - CCW when viewed from below
+        faces.append([curr + 2, next_pt + 2, next_pt + 3])
+        faces.append([curr + 2, next_pt + 3, curr + 3])
+
+        # Left side (normal pointing left) - CCW when viewed from left
+        faces.append([curr + 0, next_pt + 0, next_pt + 2])
+        faces.append([curr + 0, next_pt + 2, curr + 2])
+
+        # Right side (normal pointing right) - CCW when viewed from right
+        faces.append([curr + 1, curr + 3, next_pt + 3])
+        faces.append([curr + 1, next_pt + 3, next_pt + 1])
+
+    # Start cap (normal pointing backward along road) - CCW when viewed from start
+    faces.append([0, 2, 3])
+    faces.append([0, 3, 1])
+
+    # End cap (normal pointing forward along road) - CCW when viewed from end
+    end = (n_points - 1) * 4
+    faces.append([end + 0, end + 1, end + 3])
+    faces.append([end + 0, end + 3, end + 2])
+
+    return {
+        "vertices": vertices,
+        "faces": faces,
     }
