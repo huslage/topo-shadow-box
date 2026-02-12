@@ -1,9 +1,13 @@
-"""Tests for create_road_strip mesh generation."""
+"""Tests for mesh generation utilities."""
 
 import numpy as np
 import pytest
 
-from topo_shadow_box.core.mesh import create_road_strip
+from topo_shadow_box.core.mesh import (
+    create_road_strip,
+    create_solid_polygon,
+    triangulate_polygon,
+)
 
 
 class TestCreateRoadStrip:
@@ -63,3 +67,54 @@ class TestCreateRoadStrip:
         ]
         result = create_road_strip(centerline, width=2.0, thickness=0.3)
         assert len(result["vertices"]) == 8
+
+
+class TestTriangulatePolygon:
+    """Tests for the ear-clipping polygon triangulator."""
+
+    def test_triangle(self):
+        """A triangle produces exactly 1 triangle."""
+        pts = np.array([[0, 0], [10, 0], [5, 10]])
+        tris = triangulate_polygon(pts)
+        assert len(tris) == 1
+
+    def test_square(self):
+        """A square produces exactly 2 triangles."""
+        pts = np.array([[0, 0], [10, 0], [10, 10], [0, 10]])
+        tris = triangulate_polygon(pts)
+        assert len(tris) == 2
+
+    def test_concave_polygon(self):
+        """A concave L-shape with 6 vertices produces 4 triangles."""
+        pts = np.array([[0, 0], [10, 0], [10, 5], [5, 5], [5, 10], [0, 10]])
+        tris = triangulate_polygon(pts)
+        assert len(tris) == 4  # 6 vertices = 4 triangles
+
+    def test_empty(self):
+        """Empty input returns empty list."""
+        tris = triangulate_polygon(np.array([]).reshape(0, 2))
+        assert tris == []
+
+
+class TestCreateSolidPolygon:
+    """Tests for the watertight solid polygon generator."""
+
+    def test_basic_triangle(self):
+        """Triangle produces 6 vertices (3 top + 3 bottom) and 8 faces."""
+        points = np.array([[0, 5, 0], [10, 5, 0], [5, 5, 10]])
+        mesh = create_solid_polygon(points, thickness=1.0)
+        assert len(mesh["vertices"]) == 6  # 3 top + 3 bottom
+        assert len(mesh["faces"]) == 8  # top(1) + bottom(1) + walls(3*2)
+
+    def test_square(self):
+        """Square produces 8 vertices and 12 faces."""
+        points = np.array([[0, 5, 0], [10, 5, 0], [10, 5, 10], [0, 5, 10]])
+        mesh = create_solid_polygon(points, thickness=1.0)
+        assert len(mesh["vertices"]) == 8
+        assert len(mesh["faces"]) == 12  # top(2) + bottom(2) + walls(4*2)
+
+    def test_degenerate(self):
+        """Fewer than 3 points returns empty mesh."""
+        points = np.array([[0, 5, 0], [1, 5, 0]])
+        mesh = create_solid_polygon(points, thickness=1.0)
+        assert mesh["vertices"] == []

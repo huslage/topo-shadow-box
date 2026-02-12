@@ -1,6 +1,7 @@
 """Mesh generation for terrain, features, and GPX tracks."""
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 from ..state import Bounds, ElevationData
 from .coords import GeoToModelTransform
@@ -525,6 +526,236 @@ def create_road_strip(centerline, width=2.0, thickness=0.3):
     end = (n_points - 1) * 4
     faces.append([end + 0, end + 1, end + 3])
     faces.append([end + 0, end + 3, end + 2])
+
+    return {
+        "vertices": vertices,
+        "faces": faces,
+    }
+
+
+def triangulate_polygon(points_2d):
+    """Triangulate a 2D polygon using ear-clipping.
+
+    Ear-clipping preserves all polygon boundary edges, which is critical
+    for manifold mesh generation (walls reference boundary edges).
+
+    Args:
+        points_2d: Nx2 numpy array of 2D points forming polygon boundary.
+
+    Returns:
+        List of triangle index triplets (indices into original points_2d).
+    """
+    n = len(points_2d)
+    if n < 3:
+        return []
+    if n == 3:
+        return [[0, 1, 2]]
+
+    points_2d = np.array(points_2d, dtype=np.float64)
+
+    # Determine polygon winding (need CCW for ear-clipping)
+    # Shoelace formula for signed area
+    signed_area = 0.0
+    for i in range(n):
+        j = (i + 1) % n
+        signed_area += points_2d[i, 0] * points_2d[j, 1]
+        signed_area -= points_2d[j, 0] * points_2d[i, 1]
+    ccw = signed_area > 0
+
+    # Build index list (we remove vertices as we clip ears)
+    indices = list(range(n))
+    triangles = []
+
+    def cross_2d(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    def is_ear(idx_list, pos, pts, is_ccw):
+        """Check if vertex at position pos in idx_list is an ear."""
+        m = len(idx_list)
+        prev_pos = (pos - 1) % m
+        next_pos = (pos + 1) % m
+
+        a = pts[idx_list[prev_pos]]
+        b = pts[idx_list[pos]]
+        c = pts[idx_list[next_pos]]
+
+        # Check if this vertex is convex (cross product sign matches winding)
+        cross = cross_2d(a, b, c)
+        if is_ccw and cross <= 1e-12:
+            return False
+        if not is_ccw and cross >= -1e-12:
+            return False
+
+        # Check that no other polygon vertex is inside this triangle
+        for j in range(m):
+            if j == prev_pos or j == pos or j == next_pos:
+                continue
+            p = pts[idx_list[j]]
+            # Point-in-triangle test using barycentric coordinates
+            d1 = cross_2d(a, b, p)
+            d2 = cross_2d(b, c, p)
+            d3 = cross_2d(c, a, p)
+            has_neg = (d1 < -1e-12) or (d2 < -1e-12) or (d3 < -1e-12)
+            has_pos = (d1 > 1e-12) or (d2 > 1e-12) or (d3 > 1e-12)
+            if not (has_neg and has_pos):
+                # Point is inside or on edge of triangle
+                return False
+        return True
+
+    max_iterations = n * n  # Safety limit
+    iteration = 0
+    while len(indices) > 3 and iteration < max_iterations:
+        ear_found = False
+        m = len(indices)
+        for i in range(m):
+            if is_ear(indices, i, points_2d, ccw):
+                prev_pos = (i - 1) % m
+                next_pos = (i + 1) % m
+                triangles.append([indices[prev_pos], indices[i], indices[next_pos]])
+                indices.pop(i)
+                ear_found = True
+                break
+        if not ear_found:
+            # No ear found - polygon may be degenerate
+            # Use remaining vertices as fan triangulation fallback
+            for i in range(1, len(indices) - 1):
+                triangles.append([indices[0], indices[i], indices[i + 1]])
+            break
+        iteration += 1
+
+    # Add last triangle
+    if len(indices) == 3:
+        triangles.append([indices[0], indices[1], indices[2]])
+
+    return triangles
+
+
+def create_solid_polygon(points, thickness=0.5):
+    """Create a 3D-printable solid polygon with thickness.
+
+    Creates a watertight mesh with top surface, bottom surface, and side walls.
+    Uses ear-clipping triangulation for proper polygon fill.
+
+    Args:
+        points: Numpy array of [x, y, z] coordinates forming the polygon outline.
+        thickness: Height of the extrusion (in model units).
+
+    Returns:
+        dict: Mesh with 'vertices' and 'faces' lists.
+    """
+    n = len(points)
+    if n < 3:
+        return {"vertices": [], "faces": []}
+
+    points = np.array(points)
+
+    # Remove duplicate consecutive points
+    unique_mask = np.ones(n, dtype=bool)
+    for i in range(n):
+        next_i = (i + 1) % n
+        if np.allclose(points[i], points[next_i], atol=1e-6):
+            unique_mask[next_i] = False
+    points = points[unique_mask]
+    n = len(points)
+
+    if n < 3:
+        return {"vertices": [], "faces": []}
+
+    # Merge non-consecutive near-duplicate vertices (common in OSM water polygons
+    # where the boundary visits the same point twice, e.g. at pinch points)
+    tree = cKDTree(points[:, [0, 2]])  # Match in XZ plane
+    pairs = tree.query_pairs(r=1e-4)  # Find near-duplicate pairs
+    if pairs:
+        # Build mapping: for each duplicate, map to the lowest index
+        remap = list(range(n))
+        for i, j in pairs:
+            lo, hi = min(i, j), max(i, j)
+            remap[hi] = lo
+        # Resolve chains (if a->b->c, make a->c and b->c)
+        for i in range(n):
+            while remap[i] != remap[remap[i]]:
+                remap[i] = remap[remap[i]]
+        # Rebuild points list removing duplicates but preserving order
+        keep = [i for i in range(n) if remap[i] == i]
+        old_to_new = {}
+        for new_idx, old_idx in enumerate(keep):
+            old_to_new[old_idx] = new_idx
+        # Map all remapped indices
+        index_map = [old_to_new[remap[i]] for i in range(n)]
+        # Rebuild polygon: walk original order but use remapped indices,
+        # skip consecutive dupes
+        new_indices = []
+        for i in range(n):
+            mapped = index_map[i]
+            if len(new_indices) == 0 or mapped != new_indices[-1]:
+                new_indices.append(mapped)
+        # Remove wrap-around duplicate
+        if len(new_indices) > 1 and new_indices[0] == new_indices[-1]:
+            new_indices.pop()
+        points = points[keep]
+        n = len(points)
+
+    if n < 3:
+        return {"vertices": [], "faces": []}
+
+    # Remove collinear vertices (common in OSM data where straight edges
+    # have many nodes). Collinear vertices cause ear-clipping to fail
+    # because the cross product is zero.
+    non_collinear = []
+    for i in range(n):
+        prev_i = (i - 1) % n
+        next_i = (i + 1) % n
+        ax, az = points[prev_i, 0], points[prev_i, 2]
+        bx, bz = points[i, 0], points[i, 2]
+        cx, cz = points[next_i, 0], points[next_i, 2]
+        cross = (bx - ax) * (cz - az) - (bz - az) * (cx - ax)
+        if abs(cross) > 1e-10:
+            non_collinear.append(i)
+    if len(non_collinear) < n and len(non_collinear) >= 3:
+        points = points[non_collinear]
+        n = len(points)
+
+    if n < 3:
+        return {"vertices": [], "faces": []}
+
+    vertices = []
+    faces = []
+
+    # Create top vertices (original points)
+    for p in points:
+        vertices.append([float(p[0]), float(p[1]), float(p[2])])
+
+    # Create bottom vertices (offset down by thickness)
+    for p in points:
+        vertices.append([float(p[0]), float(p[1]) - thickness, float(p[2])])
+
+    # Triangulate top/bottom faces using ear-clipping algorithm
+    top_faces = triangulate_polygon(points[:, [0, 2]])  # Project to XZ plane
+
+    if len(top_faces) == 0:
+        # Fallback to simple fan triangulation
+        for i in range(1, n - 1):
+            top_faces.append([0, i, i + 1])
+
+    # Top face
+    for tri in top_faces:
+        faces.append([int(tri[0]), int(tri[1]), int(tri[2])])
+
+    # Bottom face (reversed winding)
+    for tri in top_faces:
+        faces.append([int(n + tri[0]), int(n + tri[2]), int(n + tri[1])])
+
+    # Side walls - connect top and bottom edges
+    for i in range(n):
+        next_i = (i + 1) % n
+        top_curr = i
+        top_next = next_i
+        bot_curr = n + i
+        bot_next = n + next_i
+
+        # Two triangles per side segment (consistent winding for outward normals)
+        faces.append([top_curr, bot_curr, top_next])
+        faces.append([top_next, bot_curr, bot_next])
 
     return {
         "vertices": vertices,
