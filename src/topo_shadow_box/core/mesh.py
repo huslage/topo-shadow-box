@@ -8,7 +8,12 @@ from scipy.spatial import cKDTree
 from ..state import Bounds, ElevationData
 from .coords import GeoToModelTransform
 from .building_shapes import BuildingShapeGenerator
-from .shape_clipper import HexagonClipper
+from .shape_clipper import (
+    CircleClipper,
+    HexagonClipper,
+    RectangleClipper,
+    ShapeClipper,
+)
 
 
 def _elevation_normalization(grid: np.ndarray) -> tuple[float, float]:
@@ -496,6 +501,35 @@ def _generate_hexagon_terrain(
 
 
 
+def _create_shape_clipper(
+    shape: str, transform: GeoToModelTransform,
+) -> ShapeClipper | None:
+    """Create the appropriate shape clipper based on model shape.
+
+    Args:
+        shape: Model shape ('square', 'circle', 'hexagon', 'rectangle').
+        transform: Geographic-to-model coordinate transform.
+
+    Returns:
+        ShapeClipper instance, or None for square (no clipping needed).
+    """
+    model_width_x = transform.model_width_x
+    model_width_z = transform.model_width_z
+    center_x = model_width_x / 2
+    center_z = model_width_z / 2
+
+    if shape == "circle":
+        radius = min(model_width_x, model_width_z) / 2
+        return CircleClipper(center_x, center_z, radius)
+    elif shape == "hexagon":
+        radius = min(model_width_x, model_width_z) / 2
+        return HexagonClipper(center_x, center_z, radius)
+    elif shape == "rectangle":
+        return RectangleClipper(center_x, center_z, model_width_x / 2, model_width_z / 2)
+    else:
+        return None  # square = no clipping needed (terrain fills the square)
+
+
 def generate_feature_meshes(
     features: dict,
     elevation: ElevationData,
@@ -506,18 +540,24 @@ def generate_feature_meshes(
 ) -> list[dict]:
     """Generate meshes for OSM features (roads, water, buildings).
 
+    Features are clipped to the model shape boundary for non-square shapes.
+
     Returns list of dicts with: name, type, vertices, faces.
     """
     min_elev, elev_range = _elevation_normalization(elevation.grid)
     model_width = max(transform.model_width_x, transform.model_width_z)
     size_scale = model_width / 200.0
 
+    # Create shape clipper for non-square shapes
+    clipper = _create_shape_clipper(shape, transform)
+
     meshes = []
 
     # Roads: extruded strips following terrain
     for road in features.get("roads", [])[:200]:
         road_mesh = _generate_road_mesh(
-            road, elevation, transform, min_elev, elev_range, vertical_scale, size_scale,
+            road, elevation, transform, min_elev, elev_range,
+            vertical_scale, size_scale, shape_clipper=clipper,
         )
         if road_mesh:
             meshes.append(road_mesh)
@@ -525,7 +565,8 @@ def generate_feature_meshes(
     # Water: solid polygons at water level
     for water in features.get("water", [])[:50]:
         water_mesh = _generate_water_mesh(
-            water, elevation, transform, min_elev, elev_range, vertical_scale, size_scale,
+            water, elevation, transform, min_elev, elev_range,
+            vertical_scale, size_scale, shape_clipper=clipper,
         )
         if water_mesh:
             meshes.append(water_mesh)
@@ -533,7 +574,8 @@ def generate_feature_meshes(
     # Buildings: shape-aware extruded footprints
     for building in features.get("buildings", [])[:150]:
         building_mesh = _generate_building_mesh(
-            building, elevation, transform, min_elev, elev_range, vertical_scale, size_scale,
+            building, elevation, transform, min_elev, elev_range,
+            vertical_scale, size_scale, shape_clipper=clipper,
         )
         if building_mesh:
             meshes.append(building_mesh)
@@ -544,8 +586,14 @@ def generate_feature_meshes(
 def _generate_road_mesh(
     road: dict, elevation: ElevationData, transform: GeoToModelTransform,
     min_elev: float, elev_range: float, vertical_scale: float, size_scale: float,
+    shape_clipper: ShapeClipper | None = None,
 ) -> dict | None:
-    """Generate a road as a watertight strip following the terrain."""
+    """Generate a road as a watertight strip following the terrain.
+
+    If a shape_clipper is provided, the road is clipped to the shape boundary.
+    Each clipped segment becomes a separate road strip; the first non-empty
+    mesh is returned.
+    """
     coords = road.get("coordinates", [])
     if len(coords) < 2:
         return None
@@ -554,19 +602,64 @@ def _generate_road_mesh(
     road_relief = max(road_height_offset, 0.6 * size_scale)
 
     # Convert coordinates to model space with elevation sampling
-    points = []
+    points_3d = []
+    points_xz = []
     for coord in coords:
         x, z = transform.geo_to_model(coord["lat"], coord["lon"])
         elev = _sample_elevation(coord["lat"], coord["lon"], elevation)
         y = transform.elevation_to_y(elev, min_elev, elev_range, vertical_scale, size_scale)
         y += road_relief
-        points.append([x, y, z])
-
-    points = np.array(points)
+        points_3d.append([x, y, z])
+        points_xz.append([x, z])
 
     road_width = 1.0 * size_scale
     road_thickness = max(0.9 * size_scale, road_relief)
 
+    if shape_clipper is not None:
+        # Clip road to shape boundary
+        clipped_segments = shape_clipper.clip_linestring(points_xz)
+        if not clipped_segments:
+            return None
+
+        # Build a KD-tree of original 3D points for elevation lookup
+        orig_xz = np.array(points_xz)
+        orig_3d = np.array(points_3d)
+        tree = cKDTree(orig_xz)
+
+        # Try each clipped segment
+        all_vertices = []
+        all_faces = []
+        for segment in clipped_segments:
+            if len(segment) < 2:
+                continue
+            # For each clipped point, find closest original 3D point for elevation
+            segment_3d = []
+            for pt in segment:
+                _, idx = tree.query([pt[0], pt[1]])
+                closest_3d = orig_3d[idx]
+                # Use the clipped XZ but keep elevation from nearest original point
+                segment_3d.append([pt[0], closest_3d[1], pt[1]])
+            segment_3d = np.array(segment_3d)
+
+            result = create_road_strip(segment_3d, width=road_width, thickness=road_thickness)
+            if result["vertices"]:
+                base_vi = len(all_vertices)
+                all_vertices.extend(result["vertices"])
+                for face in result["faces"]:
+                    all_faces.append([f + base_vi for f in face])
+
+        if not all_vertices:
+            return None
+
+        return {
+            "name": road.get("name", "Road"),
+            "type": "roads",
+            "vertices": all_vertices,
+            "faces": all_faces,
+        }
+
+    # No clipper: use all points (current behavior)
+    points = np.array(points_3d)
     result = create_road_strip(points, width=road_width, thickness=road_thickness)
     if not result["vertices"]:
         return None
@@ -582,8 +675,13 @@ def _generate_road_mesh(
 def _generate_water_mesh(
     water: dict, elevation: ElevationData, transform: GeoToModelTransform,
     min_elev: float, elev_range: float, vertical_scale: float, size_scale: float,
+    shape_clipper: ShapeClipper | None = None,
 ) -> dict | None:
-    """Generate a water body as a watertight solid polygon."""
+    """Generate a water body as a watertight solid polygon.
+
+    If a shape_clipper is provided, only points inside the shape are kept.
+    If fewer than 3 points remain inside, the water body is excluded.
+    """
     coords = water.get("coordinates", [])
     if len(coords) < 3:
         return None
@@ -596,6 +694,19 @@ def _generate_water_mesh(
         elev = _sample_elevation(coord["lat"], coord["lon"], elevation)
         elevs.append(elev)
         xz_points.append((x, z))
+
+    # Filter points through shape clipper
+    if shape_clipper is not None:
+        filtered_xz = []
+        filtered_elevs = []
+        for i, (x, z) in enumerate(xz_points):
+            if shape_clipper.is_inside(x, z):
+                filtered_xz.append((x, z))
+                filtered_elevs.append(elevs[i])
+        if len(filtered_xz) < 3:
+            return None
+        xz_points = filtered_xz
+        elevs = filtered_elevs
 
     avg_elev = sum(elevs) / len(elevs)
     water_y_base = transform.elevation_to_y(avg_elev, min_elev, elev_range, vertical_scale, size_scale)
@@ -622,8 +733,13 @@ def _generate_water_mesh(
 def _generate_building_mesh(
     building: dict, elevation: ElevationData, transform: GeoToModelTransform,
     min_elev: float, elev_range: float, vertical_scale: float, size_scale: float,
+    shape_clipper: ShapeClipper | None = None,
 ) -> dict | None:
-    """Generate a building using BuildingShapeGenerator for shape variety."""
+    """Generate a building using BuildingShapeGenerator for shape variety.
+
+    If a shape_clipper is provided, the building's four corners are checked.
+    If any corner is outside the shape boundary, the building is excluded.
+    """
     coords = building.get("coordinates", [])
     if len(coords) < 3:
         return None
@@ -648,6 +764,13 @@ def _generate_building_mesh(
         cz = (z1 + z2) / 2
         z1 = cz - min_size / 2
         z2 = cz + min_size / 2
+
+    # Check all 4 corners against shape clipper
+    if shape_clipper is not None:
+        corners = [(x1, z1), (x1, z2), (x2, z1), (x2, z2)]
+        for cx, cz in corners:
+            if not shape_clipper.is_inside(cx, cz):
+                return None
 
     # Sample elevation at center for base_y
     center_lat = (min_lat + max_lat) / 2
@@ -682,8 +805,14 @@ def generate_gpx_track_mesh(
     bounds: Bounds,
     transform: GeoToModelTransform,
     vertical_scale: float = 1.5,
+    shape: str = "square",
 ) -> dict | None:
-    """Generate a GPX track as a watertight strip above the terrain."""
+    """Generate a GPX track as a watertight strip above the terrain.
+
+    GPX tracks are NOT clipped to shape boundaries per convention
+    (preserve the natural path). The shape parameter is accepted
+    for future use but does not affect output.
+    """
     min_elev, elev_range = _elevation_normalization(elevation.grid)
     model_width = max(transform.model_width_x, transform.model_width_z)
     size_scale = model_width / 200.0

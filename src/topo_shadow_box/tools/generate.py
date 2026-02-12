@@ -76,6 +76,7 @@ def register_generate_tools(mcp: FastMCP):
                 bounds=b,
                 transform=transform,
                 vertical_scale=mp.vertical_scale,
+                shape=mp.shape,
             )
             if gpx:
                 state.gpx_mesh = MeshData(

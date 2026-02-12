@@ -7,6 +7,7 @@ from topo_shadow_box.core.mesh import (
     create_road_strip,
     create_solid_polygon,
     generate_feature_meshes,
+    generate_gpx_track_mesh,
     generate_terrain_mesh,
     triangulate_polygon,
 )
@@ -225,3 +226,121 @@ class TestTerrainMeshShapeAware:
             self.elevation, self.bounds, self.transform, 1.5, 10.0, "hexagon")
         assert len(mesh["vertices"]) > 0
         assert len(mesh["faces"]) > 0
+
+
+class TestFeatureClipping:
+    """Tests for clipping features to shape boundaries."""
+
+    def setup_method(self):
+        self.grid = np.ones((20, 20)) * 100.0
+        self.lats = np.linspace(40.0, 40.01, 20)
+        self.lons = np.linspace(-74.0, -73.99, 20)
+        self.bounds = Bounds(north=40.01, south=40.0, east=-73.99, west=-74.0)
+        self.elevation = ElevationData(
+            grid=self.grid, lats=self.lats, lons=self.lons,
+            resolution=20, min_elevation=100.0, max_elevation=100.0,
+        )
+        self.transform = GeoToModelTransform(self.bounds, 200.0)
+
+    def test_building_outside_circle_excluded(self):
+        """A building in the far corner should be excluded by a circle clipper."""
+        features = {"buildings": [{"coordinates": [
+            {"lat": 40.0001, "lon": -73.9999},
+            {"lat": 40.001, "lon": -73.9999},
+            {"lat": 40.001, "lon": -73.999},
+            {"lat": 40.0001, "lon": -73.999},
+        ], "name": "Corner", "height": 10.0, "tags": {"building": "yes"}}]}
+        meshes = generate_feature_meshes(
+            features, self.elevation, self.bounds, self.transform, 1.5, "circle")
+        assert len(meshes) == 0
+
+    def test_building_inside_circle_kept(self):
+        """A building near the center should be kept by a circle clipper."""
+        features = {"buildings": [{"coordinates": [
+            {"lat": 40.004, "lon": -73.996},
+            {"lat": 40.006, "lon": -73.996},
+            {"lat": 40.006, "lon": -73.994},
+            {"lat": 40.004, "lon": -73.994},
+        ], "name": "Center", "height": 10.0, "tags": {"building": "yes"}}]}
+        meshes = generate_feature_meshes(
+            features, self.elevation, self.bounds, self.transform, 1.5, "circle")
+        assert len(meshes) == 1
+
+    def test_road_clipped_to_circle(self):
+        """A road crossing the full model width should be clipped to the circle."""
+        features = {"roads": [{"coordinates": [
+            {"lat": 40.005, "lon": -74.0},
+            {"lat": 40.005, "lon": -73.99},
+        ], "name": "Cross Road"}]}
+        meshes = generate_feature_meshes(
+            features, self.elevation, self.bounds, self.transform, 1.5, "circle")
+        assert len(meshes) >= 1
+
+    def test_road_fully_outside_circle_excluded(self):
+        """A road entirely in the corner should produce no meshes in a circle."""
+        features = {"roads": [{"coordinates": [
+            {"lat": 40.0001, "lon": -73.9999},
+            {"lat": 40.0005, "lon": -73.9995},
+        ], "name": "Corner Road"}]}
+        meshes = generate_feature_meshes(
+            features, self.elevation, self.bounds, self.transform, 1.5, "circle")
+        assert len(meshes) == 0
+
+    def test_water_outside_circle_excluded(self):
+        """Water body in the corner should be excluded by circle clipping."""
+        features = {"water": [{"coordinates": [
+            {"lat": 40.0001, "lon": -73.9999},
+            {"lat": 40.001, "lon": -73.9999},
+            {"lat": 40.001, "lon": -73.999},
+            {"lat": 40.0001, "lon": -73.999},
+        ], "name": "Corner Pond"}]}
+        meshes = generate_feature_meshes(
+            features, self.elevation, self.bounds, self.transform, 1.5, "circle")
+        assert len(meshes) == 0
+
+    def test_water_inside_circle_kept(self):
+        """Water body near center should be kept by circle clipping."""
+        features = {"water": [{"coordinates": [
+            {"lat": 40.004, "lon": -73.996},
+            {"lat": 40.006, "lon": -73.996},
+            {"lat": 40.006, "lon": -73.994},
+            {"lat": 40.004, "lon": -73.994},
+        ], "name": "Center Lake"}]}
+        meshes = generate_feature_meshes(
+            features, self.elevation, self.bounds, self.transform, 1.5, "circle")
+        assert len(meshes) == 1
+
+    def test_square_shape_no_clipping(self):
+        """Square shape should not clip anything (all features kept)."""
+        features = {"buildings": [{"coordinates": [
+            {"lat": 40.0001, "lon": -73.9999},
+            {"lat": 40.001, "lon": -73.9999},
+            {"lat": 40.001, "lon": -73.999},
+            {"lat": 40.0001, "lon": -73.999},
+        ], "name": "Corner", "height": 10.0, "tags": {"building": "yes"}}]}
+        meshes = generate_feature_meshes(
+            features, self.elevation, self.bounds, self.transform, 1.5, "square")
+        assert len(meshes) == 1
+
+    def test_building_outside_hexagon_excluded(self):
+        """A building in the corner should be excluded by hexagon clipper."""
+        features = {"buildings": [{"coordinates": [
+            {"lat": 40.0001, "lon": -73.9999},
+            {"lat": 40.001, "lon": -73.9999},
+            {"lat": 40.001, "lon": -73.999},
+            {"lat": 40.0001, "lon": -73.999},
+        ], "name": "Corner", "height": 10.0, "tags": {"building": "yes"}}]}
+        meshes = generate_feature_meshes(
+            features, self.elevation, self.bounds, self.transform, 1.5, "hexagon")
+        assert len(meshes) == 0
+
+    def test_gpx_track_not_clipped(self):
+        """GPX tracks should not be clipped, even with a circle shape."""
+        tracks = [{"points": [
+            {"lat": 40.005, "lon": -74.0, "elevation": 100.0},
+            {"lat": 40.005, "lon": -73.99, "elevation": 100.0},
+        ]}]
+        result = generate_gpx_track_mesh(
+            tracks, self.elevation, self.bounds, self.transform, 1.5, shape="circle")
+        assert result is not None
+        assert len(result["vertices"]) > 0
