@@ -5,6 +5,7 @@ import pytest
 
 from topo_shadow_box.core.mesh import (
     _elevation_normalization,
+    create_gpx_cylinder_track,
     create_road_strip,
     create_solid_polygon,
     generate_feature_meshes,
@@ -376,3 +377,58 @@ class TestElevationNormalization:
         min_e, rng = _elevation_normalization(grid, use_percentile=False)
         assert min_e == 0.0
         assert abs(rng - 500.0) < 0.1
+
+
+class TestCreateGpxCylinderTrack:
+    """Tests for the watertight GPX cylinder tube generator."""
+
+    def _directed_edge_counts(self, faces):
+        """Return dict of directed edge -> count from face list."""
+        counts = {}
+        for face in faces:
+            a, b, c = face[0], face[1], face[2]
+            for e in [(a, b), (b, c), (c, a)]:
+                counts[e] = counts.get(e, 0) + 1
+        return counts
+
+    def test_manifold_edges(self):
+        """2-point centerline: every directed edge appears exactly once (manifold)."""
+        centerline = np.array([
+            [0.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+        ])
+        result = create_gpx_cylinder_track(centerline, radius=1.0, n_sides=8)
+        counts = self._directed_edge_counts(result["faces"])
+        for e, count in counts.items():
+            assert count == 1, f"Directed edge {e} appears {count} times (expected 1)"
+        for e in counts:
+            reverse = (e[1], e[0])
+            assert reverse in counts, f"Reverse of directed edge {e} is missing"
+
+    def test_longer_track_manifold(self):
+        """5-point centerline: all rings including intermediates are manifold."""
+        centerline = np.array([
+            [0.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [4.0, 1.0, 0.0],
+            [6.0, 0.0, 0.0],
+            [8.0, 0.0, 0.0],
+        ])
+        result = create_gpx_cylinder_track(centerline, radius=1.0, n_sides=8)
+        counts = self._directed_edge_counts(result["faces"])
+        for e, count in counts.items():
+            assert count == 1, f"Directed edge {e} appears {count} times (expected 1)"
+        for e in counts:
+            reverse = (e[1], e[0])
+            assert reverse in counts, f"Reverse of directed edge {e} is missing"
+
+    def test_vertex_and_face_count(self):
+        """Vertex and face counts match analytical formula for n_points and n_sides."""
+        n_points = 4
+        n_sides = 8
+        centerline = np.linspace([0, 0, 0], [10, 0, 0], n_points)
+        result = create_gpx_cylinder_track(centerline, radius=1.0, n_sides=n_sides)
+        # n_points rings * n_sides vertices + 2 cap centers
+        assert len(result["vertices"]) == n_points * n_sides + 2
+        # 2 * n_sides * (n_points - 1) wall quads + 2 * n_sides cap tris = 2 * n_sides * n_points
+        assert len(result["faces"]) == 2 * n_sides * n_points

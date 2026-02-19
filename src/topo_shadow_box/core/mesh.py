@@ -1008,7 +1008,7 @@ def create_gpx_cylinder_track(centerline, radius=1.0, n_sides=8):
         a = j
         b = j_next
         # CCW winding facing the start direction
-        faces.append([start_center_idx, b, a])
+        faces.append([start_center_idx, a, b])
 
     # End cap: fan from center of last ring
     end_center_idx = len(vertices)
@@ -1019,7 +1019,7 @@ def create_gpx_cylinder_track(centerline, radius=1.0, n_sides=8):
         a = end_ring + j
         b = end_ring + j_next
         # CCW winding facing the end direction
-        faces.append([end_center_idx, a, b])
+        faces.append([end_center_idx, b, a])
 
     return {
         "vertices": vertices,
