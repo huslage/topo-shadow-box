@@ -4,7 +4,6 @@ from mcp.server.fastmcp import FastMCP
 
 from ..state import state, MeshData
 from ..core.mesh import generate_terrain_mesh, generate_feature_meshes, generate_gpx_track_mesh
-from ..core.frame import generate_frame_mesh
 from ..core.map_insert import generate_map_insert_svg, generate_map_insert_plate
 from ..core.coords import GeoToModelTransform
 
@@ -16,7 +15,7 @@ def register_generate_tools(mcp: FastMCP):
         """Generate the full 3D model from current state.
 
         Requires: area set + elevation fetched. Features and GPX tracks are optional.
-        Generates: terrain mesh, feature meshes, GPX track mesh, and frame mesh.
+        Generates: terrain mesh, feature meshes, and GPX track mesh.
         """
         if not state.bounds.is_set:
             return "Error: Set an area first."
@@ -25,7 +24,6 @@ def register_generate_tools(mcp: FastMCP):
 
         b = state.bounds
         mp = state.model_params
-        fp = state.frame_params
 
         transform = GeoToModelTransform(
             bounds=b,
@@ -86,23 +84,6 @@ def register_generate_tools(mcp: FastMCP):
                     feature_type="gpx_track",
                 )
 
-        # Generate frame
-        frame = generate_frame_mesh(
-            model_width_mm=mp.width_mm,
-            frame_width_mm=fp.frame_width_mm,
-            frame_depth_mm=fp.frame_depth_mm,
-            wall_thickness_mm=fp.wall_thickness_mm,
-            shape=mp.shape,
-            bounds=b,
-            transform=transform,
-        )
-        state.frame_mesh = MeshData(
-            vertices=frame["vertices"],
-            faces=frame["faces"],
-            name="Frame",
-            feature_type="frame",
-        )
-
         # Summary
         terrain_verts = len(state.terrain_mesh.vertices)
         terrain_faces = len(state.terrain_mesh.faces)
@@ -110,13 +91,12 @@ def register_generate_tools(mcp: FastMCP):
         total_verts = terrain_verts + sum(len(m.vertices) for m in state.feature_meshes)
         if state.gpx_mesh:
             total_verts += len(state.gpx_mesh.vertices)
-        total_verts += len(state.frame_mesh.vertices)
 
         return (
             f"Model generated: {terrain_verts} terrain vertices, {terrain_faces} faces, "
             f"{feature_count} feature meshes, "
-            f"GPX: {'yes' if state.gpx_mesh else 'no'}, "
-            f"Frame: yes. Total vertices: {total_verts}"
+            f"GPX: {'yes' if state.gpx_mesh else 'no'}. "
+            f"Total vertices: {total_verts}"
         )
 
     @mcp.tool()

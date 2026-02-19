@@ -206,13 +206,12 @@ class TestTerrainMeshShapeAware:
             for idx in face:
                 assert 0 <= idx < n_verts
 
-    def test_circle_has_more_verts_than_square(self):
-        sq = generate_terrain_mesh(
-            self.elevation, self.bounds, self.transform, 1.5, 10.0, "square")
+    def test_circle_terrain_has_faces(self):
         ci = generate_terrain_mesh(
             self.elevation, self.bounds, self.transform, 1.5, 10.0, "circle")
-        # Circle adds 360 wall segments (720 verts) + center
-        assert len(ci["vertices"]) > len(sq["vertices"])
+        # Circle clips to boundary, resulting in a valid non-empty mesh
+        assert len(ci["vertices"]) > 0
+        assert len(ci["faces"]) > 0
 
     def test_hexagon_terrain_valid_indices(self):
         mesh = generate_terrain_mesh(

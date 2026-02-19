@@ -60,20 +60,12 @@ class ModelParams:
 
 
 @dataclass
-class FrameParams:
-    frame_width_mm: float = 10.0
-    frame_depth_mm: float = 30.0
-    wall_thickness_mm: float = 2.0
-
-
-@dataclass
 class Colors:
     terrain: str = "#228B22"       # ForestGreen
     water: str = "#4682B4"         # SteelBlue
     roads: str = "#696969"         # DimGray
     buildings: str = "#A9A9A9"     # DarkGray
     gpx_track: str = "#FF0000"     # Red
-    frame: str = "#8B4513"         # SaddleBrown
     map_insert: str = "#FFFFFF"    # White
 
     def hex_to_rgb(self, hex_color: str) -> tuple[int, int, int]:
@@ -91,7 +83,6 @@ class Colors:
             "roads": self.roads,
             "buildings": self.buildings,
             "gpx_track": self.gpx_track,
-            "frame": self.frame,
             "map_insert": self.map_insert,
         }
 
@@ -120,14 +111,12 @@ class SessionState:
 
     # Parameters
     model_params: ModelParams = field(default_factory=ModelParams)
-    frame_params: FrameParams = field(default_factory=FrameParams)
     colors: Colors = field(default_factory=Colors)
 
     # Generated meshes
     terrain_mesh: Optional[MeshData] = None
     feature_meshes: list = field(default_factory=list)  # [MeshData, ...]
     gpx_mesh: Optional[MeshData] = None
-    frame_mesh: Optional[MeshData] = None
     map_insert_mesh: Optional[MeshData] = None
 
     # Preview server state
@@ -158,17 +147,11 @@ class SessionState:
                 "base_height_mm": self.model_params.base_height_mm,
                 "shape": self.model_params.shape,
             },
-            "frame": {
-                "width_mm": self.frame_params.frame_width_mm,
-                "depth_mm": self.frame_params.frame_depth_mm,
-                "wall_thickness_mm": self.frame_params.wall_thickness_mm,
-            },
             "colors": self.colors.as_dict(),
             "meshes": {
                 "terrain_generated": self.terrain_mesh is not None,
                 "feature_meshes": len(self.feature_meshes),
                 "gpx_mesh_generated": self.gpx_mesh is not None,
-                "frame_generated": self.frame_mesh is not None,
             },
             "preview": {
                 "running": self.preview_running,

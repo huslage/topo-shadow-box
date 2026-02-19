@@ -41,7 +41,6 @@ def register_area_tools(mcp: FastMCP):
         state.terrain_mesh = None
         state.feature_meshes = []
         state.gpx_mesh = None
-        state.frame_mesh = None
 
         return (
             f"Area set: N={bounds.north:.6f}, S={bounds.south:.6f}, "
@@ -78,7 +77,6 @@ def register_area_tools(mcp: FastMCP):
         state.terrain_mesh = None
         state.feature_meshes = []
         state.gpx_mesh = None
-        state.frame_mesh = None
 
         total_points = sum(len(t["points"]) for t in state.gpx_tracks)
         return (

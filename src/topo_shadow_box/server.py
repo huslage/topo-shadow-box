@@ -15,7 +15,7 @@ from .tools.status import register_status_tools
 
 mcp = FastMCP(
     "topo-shadow-box",
-    description="Generate 3D-printed shadow boxes with topographical terrain, map features, and GPX tracks",
+    instructions="Generate 3D-printed shadow boxes with topographical terrain, map features, and GPX tracks",
 )
 
 # Register all tool groups

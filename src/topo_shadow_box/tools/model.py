@@ -1,4 +1,4 @@
-"""Model configuration tools: set_model_params, set_frame_params, set_colors."""
+"""Model configuration tools: set_model_params, set_colors."""
 
 from mcp.server.fastmcp import FastMCP
 
@@ -37,39 +37,10 @@ def register_model_tools(mcp: FastMCP):
         # Clear meshes since params changed
         state.terrain_mesh = None
         state.feature_meshes = []
-        state.frame_mesh = None
 
         return (
             f"Model params: {p.width_mm}mm wide, vertical_scale={p.vertical_scale}, "
             f"base={p.base_height_mm}mm, shape={p.shape}"
-        )
-
-    @mcp.tool()
-    def set_frame_params(
-        frame_width_mm: float | None = None,
-        frame_depth_mm: float | None = None,
-        wall_thickness_mm: float | None = None,
-    ) -> str:
-        """Configure the shadow box frame dimensions.
-
-        Args:
-            frame_width_mm: Width of the frame border (default 10mm)
-            frame_depth_mm: Total depth/height of the frame (default 30mm)
-            wall_thickness_mm: Thickness of frame walls (default 2mm)
-        """
-        f = state.frame_params
-        if frame_width_mm is not None:
-            f.frame_width_mm = frame_width_mm
-        if frame_depth_mm is not None:
-            f.frame_depth_mm = frame_depth_mm
-        if wall_thickness_mm is not None:
-            f.wall_thickness_mm = wall_thickness_mm
-
-        state.frame_mesh = None
-
-        return (
-            f"Frame params: width={f.frame_width_mm}mm, depth={f.frame_depth_mm}mm, "
-            f"wall={f.wall_thickness_mm}mm"
         )
 
     @mcp.tool()
@@ -79,7 +50,6 @@ def register_model_tools(mcp: FastMCP):
         roads: str | None = None,
         buildings: str | None = None,
         gpx_track: str | None = None,
-        frame: str | None = None,
         map_insert: str | None = None,
     ) -> str:
         """Set colors for multi-material export. All colors are hex strings (e.g. '#FF0000').
@@ -90,14 +60,13 @@ def register_model_tools(mcp: FastMCP):
             roads: Road color (default #696969 DimGray)
             buildings: Building color (default #A9A9A9 DarkGray)
             gpx_track: GPX track color (default #FF0000 Red)
-            frame: Frame color (default #8B4513 SaddleBrown)
             map_insert: Map insert plate color (default #FFFFFF White)
         """
         c = state.colors
         for name, value in [
             ("terrain", terrain), ("water", water), ("roads", roads),
             ("buildings", buildings), ("gpx_track", gpx_track),
-            ("frame", frame), ("map_insert", map_insert),
+            ("map_insert", map_insert),
         ]:
             if value is not None:
                 # Validate hex color

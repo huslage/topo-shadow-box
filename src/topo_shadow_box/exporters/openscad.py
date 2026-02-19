@@ -14,14 +14,12 @@ def export_openscad(
     meshes: list[dict],
     output_path: str,
     model_params,
-    frame_params,
 ) -> None:
     """Export meshes as a parametric OpenSCAD file.
 
     The .scad file includes:
     - Editable parameters at the top
     - polyhedron() calls for each mesh
-    - A parametric frame module
     - Color assignments per feature type
     """
     lines = [
@@ -35,25 +33,6 @@ def export_openscad(
         f"vertical_scale = {model_params.vertical_scale};",
         f"base_height = {model_params.base_height_mm};",
         f"model_shape = \"{model_params.shape}\";",
-        "",
-        f"frame_width = {frame_params.frame_width_mm};",
-        f"frame_depth = {frame_params.frame_depth_mm};",
-        f"wall_thickness = {frame_params.wall_thickness_mm};",
-        "",
-        "// ============================================",
-        "// Shadow Box Frame Module",
-        "// ============================================",
-        "module shadow_box_frame(w, h, fw, fd, wt) {",
-        "    // Outer dimensions",
-        "    ow = w + 2 * fw;",
-        "    oh = h + 2 * fw;",
-        "    translate([-fw, -fd, -fw])",
-        "    difference() {",
-        "        cube([ow, fd, oh]);",
-        "        translate([fw, wt, fw])",
-        "            cube([w, fd, h]);",
-        "    }",
-        "}",
         "",
         "// ============================================",
         "// Meshes",
@@ -93,20 +72,6 @@ def export_openscad(
 
         lines.append(f"  ]")
         lines.append(f");")
-
-    # Add frame instantiation at the end
-    frame_mesh = next((m for m in meshes if m["type"] == "frame"), None)
-    if not frame_mesh:
-        # If frame wasn't generated as a mesh, add the parametric module call
-        lines.extend([
-            "",
-            "// ============================================",
-            "// Frame (using parametric module)",
-            "// ============================================",
-            "// Uncomment to use the parametric frame instead of mesh:",
-            f"// color({_hex_to_scad_color('#8B4513')})",
-            "// shadow_box_frame(model_width, model_width, frame_width, frame_depth, wall_thickness);",
-        ])
 
     lines.append("")
 

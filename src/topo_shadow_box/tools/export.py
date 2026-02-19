@@ -23,15 +23,27 @@ def _collect_meshes() -> list[dict]:
             "color": colors.terrain,
         })
 
+    # Merge features by type into single objects
+    feature_groups: dict[str, dict] = {}
     for fm in state.feature_meshes:
-        color = getattr(colors, fm.feature_type, "#808080")
-        meshes.append({
-            "name": fm.name,
-            "type": fm.feature_type,
-            "vertices": fm.vertices,
-            "faces": fm.faces,
-            "color": color,
-        })
+        ftype = fm.feature_type
+        if ftype not in feature_groups:
+            color = getattr(colors, ftype, "#808080")
+            feature_groups[ftype] = {
+                "name": ftype.capitalize(),
+                "type": ftype,
+                "vertices": [],
+                "faces": [],
+                "color": color,
+            }
+        group = feature_groups[ftype]
+        base_vi = len(group["vertices"])
+        group["vertices"].extend(fm.vertices)
+        group["faces"].extend([[f + base_vi for f in face] for face in fm.faces])
+
+    for group in feature_groups.values():
+        if group["vertices"]:
+            meshes.append(group)
 
     if state.gpx_mesh:
         meshes.append({
@@ -40,15 +52,6 @@ def _collect_meshes() -> list[dict]:
             "vertices": state.gpx_mesh.vertices,
             "faces": state.gpx_mesh.faces,
             "color": colors.gpx_track,
-        })
-
-    if state.frame_mesh:
-        meshes.append({
-            "name": state.frame_mesh.name,
-            "type": state.frame_mesh.feature_type,
-            "vertices": state.frame_mesh.vertices,
-            "faces": state.frame_mesh.faces,
-            "color": colors.frame,
         })
 
     if state.map_insert_mesh:
@@ -69,7 +72,7 @@ def register_export_tools(mcp: FastMCP):
     def export_3mf(output_path: str) -> str:
         """Export the model as a multi-material 3MF file.
 
-        Each feature type (terrain, roads, water, buildings, GPX track, frame)
+        Each feature type (terrain, roads, water, buildings, GPX track)
         is a separate object with its own material color.
 
         Args:
@@ -108,7 +111,6 @@ def register_export_tools(mcp: FastMCP):
             meshes=meshes,
             output_path=output_path,
             model_params=state.model_params,
-            frame_params=state.frame_params,
         )
         return f"OpenSCAD exported to {output_path}"
 

@@ -63,15 +63,6 @@ def _state_to_json(state) -> str:
             "color": state.colors.gpx_track,
         })
 
-    if state.frame_mesh:
-        data["meshes"].append({
-            "name": state.frame_mesh.name,
-            "type": state.frame_mesh.feature_type,
-            "vertices": state.frame_mesh.vertices,
-            "faces": state.frame_mesh.faces,
-            "color": state.colors.frame,
-        })
-
     return json.dumps(data)
 
 

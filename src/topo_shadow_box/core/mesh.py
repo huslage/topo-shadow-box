@@ -282,19 +282,22 @@ def _generate_circle_terrain(
     inside: np.ndarray,
     base_height_mm: float,
 ) -> dict:
-    """Generate smooth circular base with 360-segment wall.
+    """Generate watertight circular terrain by stitching wall to boundary edges.
 
-    Finds boundary vertices (inside with an outside neighbor), interpolates
-    elevation around the circle, creates a smooth wall, and stretches boundary
-    terrain vertices outward to close gaps.
+    1. Stretches boundary vertices outward to the circle radius
+    2. Finds boundary edges (edges used by exactly 1 terrain face)
+    3. Orders them into a loop around the circle
+    4. Builds wall faces from boundary edges down to the base
+    5. Closes the bottom with a fan
+
+    This guarantees manifold geometry since wall faces share edges
+    directly with terrain faces.
     """
     top_verts = top_verts.copy()
     n = len(top_verts)
-    num_segments = 360
 
-    # Find boundary vertices and their angles for elevation interpolation
-    # A boundary vertex is inside the circle AND has at least one grid neighbor outside
-    boundary_data = []  # (angle, elevation, x, z, vertex_index)
+    # Find boundary vertices (inside with an outside neighbor)
+    boundary_set = set()
     for i in range(rows):
         for j in range(cols):
             idx = i * cols + j
@@ -311,83 +314,102 @@ def _generate_circle_terrain(
                 neighbors.append(i * cols + j + 1)
             for nb_idx in neighbors:
                 if not inside[nb_idx]:
-                    v = top_verts[idx]
-                    angle = np.arctan2(v[2] - cz, v[0] - cx)
-                    boundary_data.append((angle, v[1], v[0], v[2], idx))
+                    boundary_set.add(idx)
                     break
-
-    # Sort by angle for interpolation
-    boundary_data.sort(key=lambda x: x[0])
-
-    # Move ALL boundary vertices outward to exactly match the wall circle
-    # This stretches the terrain mesh to close the gap with the smooth wall
-    for data in boundary_data:
-        idx = data[4]
-        v = top_verts[idx]
-        dx = v[0] - cx
-        dz = v[2] - cz
-        dist = np.sqrt(dx * dx + dz * dz)
-        if dist > 0:
-            scale = radius / dist
-            top_verts[idx][0] = cx + dx * scale
-            top_verts[idx][2] = cz + dz * scale
-
-    # Vertex layout for wall/base:
-    # n .. n+359:          outer top circle (wall top edge on exact circle)
-    # n+360 .. n+719:      outer bottom circle (wall base)
-    # n+720:               center bottom vertex
-    outer_top_start = n
-    outer_bottom_start = n + num_segments
-    center_bottom_idx = n + 2 * num_segments
-
-    wall_verts = []
-    for i in range(num_segments):
-        angle = 2 * np.pi * i / num_segments - np.pi  # -pi to pi
-
-        cos_a = np.cos(angle)
-        sin_a = np.sin(angle)
-
-        outer_x = cx + radius * cos_a
-        outer_z = cz + radius * sin_a
-
-        # Interpolate elevation from boundary vertices
-        elev = _interpolate_boundary_elevation(angle, boundary_data)
-
-        # Top follows terrain contour
-        wall_verts.append([outer_x, elev, outer_z])
-
-    for i in range(num_segments):
-        angle = 2 * np.pi * i / num_segments - np.pi
-        cos_a = np.cos(angle)
-        sin_a = np.sin(angle)
-        outer_x = cx + radius * cos_a
-        outer_z = cz + radius * sin_a
-        # Bottom at base
-        wall_verts.append([outer_x, -base_height_mm, outer_z])
-
-    # Center bottom vertex
-    wall_verts.append([cx, -base_height_mm, cz])
-
-    all_verts = np.vstack([top_verts, np.array(wall_verts)])
 
     faces = list(terrain_faces)
 
-    # Outer wall faces (CCW when viewed from outside)
-    for i in range(num_segments):
-        next_i = (i + 1) % num_segments
-        ot0 = outer_top_start + i
-        ot1 = outer_top_start + next_i
-        ob0 = outer_bottom_start + i
-        ob1 = outer_bottom_start + next_i
-        faces.append([ot0, ob0, ot1])
-        faces.append([ot1, ob0, ob1])
+    # Use directed edges from terrain faces to find boundary loop.
+    # For each terrain face [a,b,c], directed edges are (a,b), (b,c), (c,a).
+    # A boundary directed edge is one whose reverse does NOT exist.
+    # This gives exactly one successor per boundary vertex = clean loop walk.
+    all_directed = set()
+    for face in terrain_faces:
+        all_directed.add((face[0], face[1]))
+        all_directed.add((face[1], face[2]))
+        all_directed.add((face[2], face[0]))
 
-    # Bottom face: fan triangulation from center (CCW from below)
-    for i in range(num_segments):
-        next_i = (i + 1) % num_segments
-        ob0 = outer_bottom_start + i
-        ob1 = outer_bottom_start + next_i
-        faces.append([center_bottom_idx, ob1, ob0])
+    # Boundary directed edges: those without a reverse
+    boundary_next: dict[int, int] = {}
+    for a, b in all_directed:
+        if (b, a) not in all_directed:
+            boundary_next[a] = b
+
+    if len(boundary_next) < 3:
+        return {"vertices": top_verts.tolist(), "faces": faces}
+
+    # Walk the directed boundary loop - each vertex has exactly one successor
+    start = next(iter(boundary_next))
+    loop = [start]
+    current = boundary_next[start]
+    while current != start:
+        loop.append(current)
+        current = boundary_next[current]
+
+    if len(loop) < 3:
+        return {"vertices": top_verts.tolist(), "faces": faces}
+
+    # Determine loop winding direction using signed area (shoelace in XZ)
+    signed_area = 0.0
+    for i in range(len(loop)):
+        next_i = (i + 1) % len(loop)
+        v0 = top_verts[loop[i]]
+        v1 = top_verts[loop[next_i]]
+        signed_area += (v0[0] - cx) * (v1[2] - cz) - (v1[0] - cx) * (v0[2] - cz)
+
+    # Make loop CW for outward wall normals
+    if signed_area > 0:
+        loop = loop[::-1]
+
+    # Redistribute boundary vertices evenly around the circle for a smooth edge.
+    # Calculate each vertex's current angle, then assign evenly-spaced angles
+    # while preserving the loop order.
+    n_boundary = len(loop)
+    # Find the starting angle (vertex with smallest angle) to anchor distribution
+    angles = []
+    for vi in loop:
+        v = top_verts[vi]
+        angles.append(np.arctan2(v[2] - cz, v[0] - cx))
+
+    # Evenly distribute angles around the full circle, starting from the
+    # angle of the first vertex in the CW loop
+    start_angle = angles[0]
+    for i, vi in enumerate(loop):
+        # CW loop: subtract increasing angles
+        even_angle = start_angle - (2.0 * np.pi * i / n_boundary)
+        top_verts[vi][0] = cx + radius * np.cos(even_angle)
+        top_verts[vi][2] = cz + radius * np.sin(even_angle)
+
+    # Create bottom vertices for each boundary loop vertex
+    # Layout: n .. n+len(loop)-1 = bottom vertices, n+len(loop) = center bottom
+    bottom_start = n
+    center_bottom_idx = n + len(loop)
+
+    bottom_verts = []
+    for vi in loop:
+        v = top_verts[vi]
+        bottom_verts.append([v[0], -base_height_mm, v[2]])
+    bottom_verts.append([cx, -base_height_mm, cz])
+
+    all_verts = np.vstack([top_verts, np.array(bottom_verts)])
+
+    # Wall faces: connect each boundary edge to its bottom counterpart
+    # Loop is CW, so wall normals point outward with this winding
+    for i in range(len(loop)):
+        next_i = (i + 1) % len(loop)
+        top0 = loop[i]
+        top1 = loop[next_i]
+        bot0 = bottom_start + i
+        bot1 = bottom_start + next_i
+        faces.append([top0, top1, bot0])
+        faces.append([top1, bot1, bot0])
+
+    # Bottom face: fan from center (CCW from below = CW from above)
+    for i in range(len(loop)):
+        next_i = (i + 1) % len(loop)
+        bot0 = bottom_start + i
+        bot1 = bottom_start + next_i
+        faces.append([center_bottom_idx, bot0, bot1])
 
     return {
         "vertices": all_verts.tolist(),
@@ -538,7 +560,8 @@ def _create_shape_clipper(
     elif shape == "rectangle":
         return RectangleClipper(center_x, center_z, model_width_x / 2, model_width_z / 2)
     else:
-        return None  # square = no clipping needed (terrain fills the square)
+        # Square/default: clip features to terrain boundary
+        return RectangleClipper(center_x, center_z, model_width_x / 2, model_width_z / 2)
 
 
 def generate_feature_meshes(
@@ -559,7 +582,7 @@ def generate_feature_meshes(
     model_width = max(transform.model_width_x, transform.model_width_z)
     size_scale = model_width / 200.0
 
-    # Create shape clipper for non-square shapes
+    # Create shape clipper for boundary clipping
     clipper = _create_shape_clipper(shape, transform)
 
     meshes = []
@@ -583,10 +606,12 @@ def generate_feature_meshes(
             meshes.append(water_mesh)
 
     # Buildings: shape-aware extruded footprints
+    building_gen = BuildingShapeGenerator()
     for building in features.get("buildings", [])[:150]:
         building_mesh = _generate_building_mesh(
             building, elevation, transform, min_elev, elev_range,
             vertical_scale, size_scale, shape_clipper=clipper,
+            building_shape_gen=building_gen,
         )
         if building_mesh:
             meshes.append(building_mesh)
@@ -609,8 +634,8 @@ def _generate_road_mesh(
     if len(coords) < 2:
         return None
 
-    road_height_offset = 0.2 * size_scale
-    road_relief = max(road_height_offset, 0.6 * size_scale)
+    road_height_offset = 0.15 * size_scale
+    road_relief = road_height_offset
 
     # Convert coordinates to model space with elevation sampling
     points_3d = []
@@ -624,7 +649,7 @@ def _generate_road_mesh(
         points_xz.append([x, z])
 
     road_width = 1.0 * size_scale
-    road_thickness = max(0.9 * size_scale, road_relief)
+    road_thickness = 0.3 * size_scale
 
     if shape_clipper is not None:
         # Clip road to shape boundary
@@ -722,7 +747,7 @@ def _generate_water_mesh(
     avg_elev = sum(elevs) / len(elevs)
     water_y_base = transform.elevation_to_y(avg_elev, min_elev, elev_range, vertical_scale, size_scale)
 
-    water_relief = max(0.6 * size_scale, 0.5 * size_scale)  # = 0.6 * size_scale
+    water_relief = 0.6 * size_scale
     water_y = max(0.7 * size_scale, water_y_base + water_relief)
     water_thickness = max(1.2 * size_scale, 2.0 * water_relief)
 
@@ -745,6 +770,7 @@ def _generate_building_mesh(
     building: dict, elevation: ElevationData, transform: GeoToModelTransform,
     min_elev: float, elev_range: float, vertical_scale: float, size_scale: float,
     shape_clipper: ShapeClipper | None = None,
+    building_shape_gen: BuildingShapeGenerator | None = None,
 ) -> dict | None:
     """Generate a building using BuildingShapeGenerator for shape variety.
 
@@ -796,7 +822,7 @@ def _generate_building_mesh(
 
     # Determine building shape from tags
     tags = building.get("tags", {})
-    gen = BuildingShapeGenerator()
+    gen = building_shape_gen or BuildingShapeGenerator()
     shape_type = gen.determine_building_shape(tags)
 
     # Generate the mesh
@@ -818,19 +844,21 @@ def generate_gpx_track_mesh(
     vertical_scale: float = 1.5,
     shape: str = "square",
 ) -> dict | None:
-    """Generate a GPX track as a watertight strip above the terrain.
+    """Generate a GPX track as a cylindrical tube above the terrain.
 
     GPX tracks are NOT clipped to shape boundaries per convention
     (preserve the natural path). The shape parameter is accepted
     for future use but does not affect output.
+
+    The tube has a circular cross-section with radius = 1mm * size_scale,
+    centered at terrain_y + radius so the bottom touches terrain and
+    the top protrudes 2 * radius above terrain.
     """
     min_elev, elev_range = _elevation_normalization(elevation.grid)
     model_width = max(transform.model_width_x, transform.model_width_z)
     size_scale = model_width / 200.0
 
-    gpx_relief = max(0.8 * size_scale, 0.3 * size_scale)  # = 0.8 * size_scale
-    gpx_thickness = max(1.2 * size_scale, 2.0 * gpx_relief)
-    gpx_width = 2.5 * size_scale
+    cylinder_radius = 1.0 * size_scale
 
     all_vertices = []
     all_faces = []
@@ -851,6 +879,7 @@ def generate_gpx_track_mesh(
             continue
 
         # Build numpy array of sampled [x, y, z] points
+        # Y is set to terrain_y + radius so bottom of cylinder rests on terrain
         track_points = []
         for pt in sampled:
             x, z = transform.geo_to_model(pt["lat"], pt["lon"])
@@ -862,12 +891,12 @@ def generate_gpx_track_mesh(
                 elev = _sample_elevation(pt["lat"], pt["lon"], elevation)
 
             y = transform.elevation_to_y(elev, min_elev, elev_range, vertical_scale, size_scale)
-            y += gpx_relief
+            y += cylinder_radius  # Center of cylinder at terrain + radius
             track_points.append([x, y, z])
 
         track_points = np.array(track_points)
 
-        result = create_road_strip(track_points, width=gpx_width, thickness=gpx_thickness)
+        result = create_gpx_cylinder_track(track_points, radius=cylinder_radius, n_sides=8)
         if not result["vertices"]:
             continue
 
@@ -885,6 +914,116 @@ def generate_gpx_track_mesh(
         "faces": all_faces,
         "name": "GPX Track",
         "type": "gpx_track",
+    }
+
+
+def create_gpx_cylinder_track(centerline, radius=1.0, n_sides=8):
+    """Create a cylindrical tube along a centerline path.
+
+    Generates a circular cross-section tube (n_sides polygon) following
+    the centerline. The center of the tube is at each centerline point;
+    setting centerline Y to terrain_y + radius makes the bottom touch the
+    terrain and top protrude 2*radius above it.
+
+    Args:
+        centerline: Numpy array of [x, y, z] points defining the tube center.
+        radius: Radius of the circular cross-section in mm.
+        n_sides: Number of sides for the polygon approximating the circle.
+
+    Returns:
+        Dict with 'vertices' (list of [x,y,z]) and 'faces' (list of [i,j,k]).
+    """
+    if len(centerline) < 2:
+        return {"vertices": [], "faces": []}
+
+    # Remove duplicate consecutive points
+    clean = [centerline[0]]
+    for i in range(1, len(centerline)):
+        if not np.allclose(centerline[i], centerline[i - 1], atol=1e-6):
+            clean.append(centerline[i])
+    centerline = np.array(clean)
+
+    if len(centerline) < 2:
+        return {"vertices": [], "faces": []}
+
+    n_points = len(centerline)
+    up = np.array([0.0, 1.0, 0.0])
+
+    # Build per-point tangent and perpendicular frame (u, v)
+    frames = []
+    for i in range(n_points):
+        if i == 0:
+            tangent = centerline[1] - centerline[0]
+        elif i == n_points - 1:
+            tangent = centerline[-1] - centerline[-2]
+        else:
+            tangent = centerline[i + 1] - centerline[i - 1]
+
+        t_len = np.linalg.norm(tangent)
+        if t_len < 1e-8:
+            tangent = np.array([1.0, 0.0, 0.0])
+        else:
+            tangent = tangent / t_len
+
+        # Build orthonormal frame perpendicular to tangent
+        ref = up if abs(np.dot(tangent, up)) < 0.99 else np.array([1.0, 0.0, 0.0])
+        u = np.cross(tangent, ref)
+        u /= np.linalg.norm(u)
+        v = np.cross(tangent, u)
+        v /= np.linalg.norm(v)
+        frames.append((u, v))
+
+    # Build rings of vertices
+    # Ring i has n_sides vertices at angles 0..2pi
+    vertices = []
+    for i in range(n_points):
+        u, v = frames[i]
+        center = centerline[i]
+        for j in range(n_sides):
+            angle = 2.0 * np.pi * j / n_sides
+            pt = center + radius * (np.cos(angle) * u + np.sin(angle) * v)
+            vertices.append(pt.tolist())
+
+    faces = []
+
+    # Tube walls: connect adjacent rings
+    for i in range(n_points - 1):
+        ring_curr = i * n_sides
+        ring_next = (i + 1) * n_sides
+        for j in range(n_sides):
+            j_next = (j + 1) % n_sides
+            a = ring_curr + j
+            b = ring_curr + j_next
+            c = ring_next + j
+            d = ring_next + j_next
+            # Two triangles per quad (CCW from outside)
+            faces.append([a, c, b])
+            faces.append([b, c, d])
+
+    # Start cap: fan from center of first ring
+    start_center_idx = len(vertices)
+    vertices.append(centerline[0].tolist())
+    for j in range(n_sides):
+        j_next = (j + 1) % n_sides
+        a = j
+        b = j_next
+        # CCW winding facing the start direction
+        faces.append([start_center_idx, b, a])
+
+    # End cap: fan from center of last ring
+    end_center_idx = len(vertices)
+    vertices.append(centerline[-1].tolist())
+    end_ring = (n_points - 1) * n_sides
+    for j in range(n_sides):
+        j_next = (j + 1) % n_sides
+        a = end_ring + j
+        b = end_ring + j_next
+        # CCW winding facing the end direction
+        faces.append([end_center_idx, a, b])
+
+    return {
+        "vertices": vertices,
+        "faces": faces,
     }
 
 
