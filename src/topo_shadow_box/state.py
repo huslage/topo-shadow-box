@@ -61,10 +61,10 @@ class ModelParams:
 
 @dataclass
 class Colors:
-    terrain: str = "#228B22"       # ForestGreen
+    terrain: str = "#C8A882"       # Tan
     water: str = "#4682B4"         # SteelBlue
-    roads: str = "#696969"         # DimGray
-    buildings: str = "#A9A9A9"     # DarkGray
+    roads: str = "#D4C5A9"         # Light sand
+    buildings: str = "#E8D5B7"     # Cream
     gpx_track: str = "#FF0000"     # Red
     map_insert: str = "#FFFFFF"    # White
 

@@ -86,7 +86,7 @@ def register_export_tools(mcp: FastMCP):
             return "Error: No mesh data to export."
 
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-        result = do_export_3mf(meshes, output_path)
+        result = do_export_3mf(meshes, output_path, base_height_mm=state.model_params.base_height_mm)
         return f"3MF exported to {output_path} ({result['objects']} objects)"
 
     @mcp.tool()

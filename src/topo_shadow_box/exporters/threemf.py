@@ -8,7 +8,7 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
 
 
-def export_3mf(meshes: list[dict], output_path: str) -> dict:
+def export_3mf(meshes: list[dict], output_path: str, base_height_mm: float = 10.0) -> dict:
     """Export meshes as a multi-material 3MF file.
 
     Each mesh dict has: name, type, vertices, faces, color (hex string).
@@ -28,7 +28,7 @@ def export_3mf(meshes: list[dict], output_path: str) -> dict:
     if not objects:
         raise ValueError("No mesh data to export")
 
-    model_xml = _build_model_xml(objects)
+    model_xml = _build_model_xml(objects, base_height_mm)
 
     with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("[Content_Types].xml", _CONTENT_TYPES)
@@ -38,7 +38,7 @@ def export_3mf(meshes: list[dict], output_path: str) -> dict:
     return {"success": True, "filepath": output_path, "objects": len(objects)}
 
 
-def _build_model_xml(objects: list[tuple]) -> str:
+def _build_model_xml(objects: list[tuple], base_height_mm: float = 10.0) -> str:
     """Build the 3MF model XML with multiple colored objects."""
     parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -86,7 +86,7 @@ def _build_model_xml(objects: list[tuple]) -> str:
     # Build items
     parts.append("  <build>")
     for obj_idx in range(len(objects)):
-        parts.append(f'    <item objectid="{obj_idx + 2}"/>')
+        parts.append(f'    <item objectid="{obj_idx + 2}" transform="1 0 0 0 0 -1 0 1 0 0 0 {base_height_mm:.6f}"/>')
     parts.append("  </build>")
     parts.append("</model>")
 
