@@ -86,7 +86,7 @@ def _build_model_xml(objects: list[tuple], base_height_mm: float = 10.0) -> str:
     # Build items
     parts.append("  <build>")
     for obj_idx in range(len(objects)):
-        parts.append(f'    <item objectid="{obj_idx + 2}" transform="1 0 0 0 0 -1 0 1 0 0 0 {base_height_mm:.6f}"/>')
+        parts.append(f'    <item objectid="{obj_idx + 2}" transform="1 0 0 0 0 1 0 -1 0 0 0 {base_height_mm:.6f}"/>')
     parts.append("  </build>")
     parts.append("</model>")
 
