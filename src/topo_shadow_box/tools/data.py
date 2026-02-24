@@ -29,12 +29,12 @@ def register_data_tools(mcp: FastMCP):
         )
 
         state.elevation = ElevationData(
-            grid=result["grid"],
-            lats=result["lats"],
-            lons=result["lons"],
-            resolution=resolution,
-            min_elevation=result["min_elevation"],
-            max_elevation=result["max_elevation"],
+            grid=result.grid,
+            lats=result.lats,
+            lons=result.lons,
+            resolution=result.resolution,
+            min_elevation=result.min_elevation,
+            max_elevation=result.max_elevation,
             is_set=True,
         )
 
@@ -45,8 +45,8 @@ def register_data_tools(mcp: FastMCP):
 
         return (
             f"Elevation fetched: {resolution}x{resolution} grid, "
-            f"range {result['min_elevation']:.0f}m to {result['max_elevation']:.0f}m "
-            f"({result['max_elevation'] - result['min_elevation']:.0f}m relief)"
+            f"range {result.min_elevation:.0f}m to {result.max_elevation:.0f}m "
+            f"({result.max_elevation - result.min_elevation:.0f}m relief)"
         )
 
     @mcp.tool()

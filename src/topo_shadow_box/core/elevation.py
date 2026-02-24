@@ -9,6 +9,8 @@ from PIL import Image
 from scipy import interpolate
 from scipy.ndimage import gaussian_filter
 
+from .models import ElevationResult
+
 # AWS Terrain Tiles (Mapzen/Tilezen Terrarium format) - free, globally available
 AWS_TERRAIN_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
 
@@ -54,7 +56,7 @@ def _pick_zoom(north: float, south: float, east: float, west: float) -> int:
 async def fetch_terrain_elevation(
     north: float, south: float, east: float, west: float,
     resolution: int = 200,
-) -> dict:
+) -> ElevationResult:
     """Fetch elevation data for a bounding box from AWS Terrain-RGB tiles.
 
     Returns dict with: grid (ndarray), lats (ndarray), lons (ndarray),
@@ -148,10 +150,11 @@ async def fetch_terrain_elevation(
     # Smooth to reduce tile boundary artifacts
     elevations = gaussian_filter(elevations, sigma=0.5)
 
-    return {
-        "grid": elevations,
-        "lats": target_lats,
-        "lons": target_lons,
-        "min_elevation": float(np.min(elevations)),
-        "max_elevation": float(np.max(elevations)),
-    }
+    return ElevationResult(
+        grid=elevations,
+        lats=target_lats,
+        lons=target_lons,
+        resolution=resolution,
+        min_elevation=float(np.min(elevations)),
+        max_elevation=float(np.max(elevations)),
+    )
