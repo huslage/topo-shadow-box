@@ -2,6 +2,7 @@
 
 from ..state import Bounds, Colors
 from .coords import GeoToModelTransform
+from .models import MeshResult
 
 
 def generate_map_insert_svg(
@@ -77,7 +78,7 @@ def generate_map_insert_plate(
     gpx_tracks: list,
     transform: GeoToModelTransform,
     plate_thickness_mm: float = 1.0,
-) -> dict:
+) -> MeshResult:
     """Generate a thin 3D plate for the map insert.
 
     The plate is a flat rectangle matching the model dimensions, with features
@@ -119,4 +120,4 @@ def generate_map_insert_plate(
         [1, 6, 2], [1, 5, 6],
     ]
 
-    return {"vertices": vertices, "faces": faces}
+    return MeshResult(vertices=vertices, faces=faces, name="Map Insert", feature_type="map_insert")
