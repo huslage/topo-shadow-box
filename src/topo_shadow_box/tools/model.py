@@ -30,9 +30,10 @@ def register_model_tools(mcp: FastMCP):
         if base_height_mm is not None:
             p.base_height_mm = base_height_mm
         if shape is not None:
-            if shape not in ("square", "circle", "rectangle", "hexagon"):
-                return f"Error: Invalid shape '{shape}'. Use: square, circle, rectangle, hexagon."
-            p.shape = shape
+            try:
+                p.shape = shape
+            except Exception as e:
+                return f"Error: {e}"
 
         # Clear meshes since params changed
         state.terrain_mesh = None
@@ -69,10 +70,9 @@ def register_model_tools(mcp: FastMCP):
             ("map_insert", map_insert),
         ]:
             if value is not None:
-                # Validate hex color
-                v = value.lstrip("#")
-                if len(v) != 6 or not all(ch in "0123456789abcdefABCDEF" for ch in v):
-                    return f"Error: Invalid hex color '{value}' for {name}."
-                setattr(c, name, f"#{v.upper()}")
+                try:
+                    setattr(c, name, value)
+                except Exception as e:
+                    return f"Error: {e}"
 
         return f"Colors: {c.as_dict()}"
