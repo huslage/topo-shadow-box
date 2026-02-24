@@ -57,3 +57,10 @@ class ElevationResult(BaseModel):
     resolution: int = Field(gt=0, le=1000)
     min_elevation: float
     max_elevation: float
+
+
+class OsmFeatureSet(BaseModel):
+    """Return type for fetch_osm_features. Feature lists are typed in Layer 2."""
+    roads: list = []
+    water: list = []
+    buildings: list = []

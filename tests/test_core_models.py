@@ -99,3 +99,22 @@ class TestElevationResult:
                 min_elevation=0.0,
                 max_elevation=0.0,
             )
+
+
+class TestOsmFeatureSet:
+    def test_empty_feature_set(self):
+        from topo_shadow_box.core.models import OsmFeatureSet
+        fs = OsmFeatureSet()
+        assert fs.roads == []
+        assert fs.water == []
+        assert fs.buildings == []
+
+    def test_feature_set_with_data(self):
+        from topo_shadow_box.core.models import OsmFeatureSet
+        fs = OsmFeatureSet(
+            roads=[{"id": 1}],
+            water=[],
+            buildings=[{"id": 2}, {"id": 3}],
+        )
+        assert len(fs.roads) == 1
+        assert len(fs.buildings) == 2
