@@ -52,14 +52,14 @@ def _build_model_xml(objects: list[tuple], base_height_mm: float = 10.0) -> str:
     # Base materials
     parts.append('    <m:basematerials id="1">')
     for name, _, _, (r, g, b) in objects:
-        safe_name = name.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
+        safe_name = (name.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;"))
         parts.append(f'      <m:base name="{safe_name}" displaycolor="#{r:02X}{g:02X}{b:02X}"/>')
     parts.append("    </m:basematerials>")
 
     # Objects
     for obj_idx, (name, vertices, faces, _) in enumerate(objects):
         obj_id = obj_idx + 2
-        safe_name = name.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
+        safe_name = (name.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;"))
         parts.append(
             f'    <object id="{obj_id}" name="{safe_name}" '
             f'pid="1" pindex="{obj_idx}" type="model">'

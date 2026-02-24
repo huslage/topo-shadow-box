@@ -79,6 +79,18 @@ class TestExport3MF:
         assert "&quot;" in xml
         assert ' name="Rock & Roll' not in xml
 
+
+    def test_gt_entity_escaped_in_name(self, tmp_path):
+        """'>' in mesh name should be escaped as '&gt;' in 3MF XML."""
+        from topo_shadow_box.exporters.threemf import export_3mf
+        mesh = _minimal_mesh(name="Height > 100m", color="#FF0000")
+        out = str(tmp_path / "gt_escape.3mf")
+        export_3mf([mesh], out)
+        with zipfile.ZipFile(out) as zf:
+            xml = zf.read("3D/3dmodel.model").decode()
+        assert "&gt;" in xml, "Should escape '>' as '&gt;'"
+        assert ' name="Height > 100m"' not in xml, "Should not have unescaped '>' in attribute"
+
     def test_raises_on_empty_mesh_list(self, tmp_path):
         from topo_shadow_box.exporters.threemf import export_3mf
         with pytest.raises(ValueError, match="No mesh data"):
