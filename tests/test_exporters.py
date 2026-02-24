@@ -222,3 +222,53 @@ def test_validate_output_path_accepts_home_subdirectory(tmp_path):
     home_subpath = str(Path.home() / "topo_test_output.3mf")
     # Should not raise
     _validate_output_path(home_subpath)
+
+
+def test_all_mesh_feature_types_have_colors():
+    """Every mesh feature type used by export must have a color in Colors."""
+    from topo_shadow_box.state import Colors
+
+    colors = Colors()
+    colors_dict = colors.as_dict()
+    # Known feature types produced by mesh generation and used in _collect_meshes
+    known_types = {"terrain", "roads", "water", "buildings", "gpx_track", "map_insert"}
+    for ftype in known_types:
+        assert ftype in colors_dict, (
+            f"Feature type '{ftype}' has no color in Colors.as_dict(). "
+            "Add it or remove from known_types if no longer used."
+        )
+
+
+def test_unknown_feature_type_logs_warning(caplog):
+    """_collect_meshes should log a warning when a mesh has an unknown feature type."""
+    import logging
+    from topo_shadow_box.state import state, MeshData
+
+    # Save and restore state
+    original_feature_meshes = state.feature_meshes
+    original_terrain = state.terrain_mesh
+
+    state.terrain_mesh = None
+    state.feature_meshes = [
+        MeshData(
+            vertices=[[0, 0, 0], [1, 0, 0], [0, 1, 0]],
+            faces=[[0, 1, 2]],
+            name="Unknown Feature",
+            feature_type="unknown_type_xyz",
+        )
+    ]
+
+    from topo_shadow_box.tools.export import _collect_meshes
+    with caplog.at_level(logging.WARNING, logger="topo_shadow_box.tools.export"):
+        meshes = _collect_meshes()
+
+    # Restore state
+    state.feature_meshes = original_feature_meshes
+    state.terrain_mesh = original_terrain
+
+    assert any(
+        r.name == "topo_shadow_box.tools.export"
+        and r.levelno == logging.WARNING
+        and "unknown_type_xyz" in r.message
+        for r in caplog.records
+    ), f"Expected WARNING about unknown_type_xyz. Got: {[(r.name, r.levelno, r.message) for r in caplog.records]}"

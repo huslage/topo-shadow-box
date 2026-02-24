@@ -1,5 +1,6 @@
 """Export tools: export_3mf, export_openscad, export_svg."""
 
+import logging
 import os
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP
@@ -9,6 +10,8 @@ from ..exporters.threemf import export_3mf as do_export_3mf
 from ..exporters.openscad import export_openscad as do_export_openscad
 from ..exporters.svg import export_svg as do_export_svg
 from ._prereqs import require_state
+
+logger = logging.getLogger(__name__)
 
 
 def _validate_output_path(output_path: str) -> None:
@@ -43,7 +46,12 @@ def _collect_meshes() -> list[dict]:
     for fm in state.feature_meshes:
         ftype = fm.feature_type
         if ftype not in feature_groups:
-            color = getattr(colors, ftype, "#808080")
+            color = getattr(colors, ftype, None)
+            if color is None:
+                logger.warning(
+                    "No color defined for feature type %r — using default gray #808080", ftype
+                )
+                color = "#808080"
             feature_groups[ftype] = {
                 "name": ftype.capitalize(),
                 "type": ftype,

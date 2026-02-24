@@ -176,5 +176,13 @@ class SessionState(BaseModel):
         }
 
 
-# Global session state — one per MCP server process
+# Global session state — one per MCP server process.
+#
+# SINGLE-CLIENT LIMITATION: This singleton is shared across all tool calls
+# within a server process. This works correctly for single-user MCP usage
+# (the typical case for this server).
+#
+# For multi-client support, state would need to move to per-request context
+# (e.g., contextvars.ContextVar) or be passed as a parameter through each
+# tool call rather than accessed as a module-level singleton.
 state = SessionState()
