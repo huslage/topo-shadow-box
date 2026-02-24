@@ -567,7 +567,7 @@ def _create_shape_clipper(
 
 
 def generate_feature_meshes(
-    features: dict,
+    features,
     elevation: ElevationData,
     bounds: Bounds,
     transform: GeoToModelTransform,
@@ -589,8 +589,18 @@ def generate_feature_meshes(
 
     meshes = []
 
+    # Determine if features is an OsmFeatureSet or a plain dict
+    if hasattr(features, "roads"):
+        roads_list = features.roads[:200]
+        water_list = features.water[:50]
+        buildings_list = features.buildings[:150]
+    else:
+        roads_list = features.get("roads", [])[:200]
+        water_list = features.get("water", [])[:50]
+        buildings_list = features.get("buildings", [])[:150]
+
     # Roads: extruded strips following terrain
-    for road in features.get("roads", [])[:200]:
+    for road in roads_list:
         road_mesh = _generate_road_mesh(
             road, elevation, transform, min_elev, elev_range,
             vertical_scale, size_scale, shape_clipper=clipper,
@@ -604,7 +614,7 @@ def generate_feature_meshes(
             ))
 
     # Water: solid polygons at water level
-    for water in features.get("water", [])[:50]:
+    for water in water_list:
         water_mesh = _generate_water_mesh(
             water, elevation, transform, min_elev, elev_range,
             vertical_scale, size_scale, shape_clipper=clipper,
@@ -619,7 +629,7 @@ def generate_feature_meshes(
 
     # Buildings: shape-aware extruded footprints
     building_gen = BuildingShapeGenerator()
-    for building in features.get("buildings", [])[:150]:
+    for building in buildings_list:
         building_mesh = _generate_building_mesh(
             building, elevation, transform, min_elev, elev_range,
             vertical_scale, size_scale, shape_clipper=clipper,
@@ -636,8 +646,32 @@ def generate_feature_meshes(
     return meshes
 
 
+def _get_attr_or_key(obj, attr, default=None):
+    """Get attribute from typed model or key from dict."""
+    if hasattr(obj, attr):
+        val = getattr(obj, attr)
+        return val if val is not None else default
+    elif isinstance(obj, dict):
+        return obj.get(attr, default)
+    return default
+
+
+def _get_lat(coord):
+    """Get lat from Coordinate model or dict."""
+    if hasattr(coord, "lat"):
+        return coord.lat
+    return coord["lat"]
+
+
+def _get_lon(coord):
+    """Get lon from Coordinate model or dict."""
+    if hasattr(coord, "lon"):
+        return coord.lon
+    return coord["lon"]
+
+
 def _generate_road_mesh(
-    road: dict, elevation: ElevationData, transform: GeoToModelTransform,
+    road, elevation: ElevationData, transform: GeoToModelTransform,
     min_elev: float, elev_range: float, vertical_scale: float, size_scale: float,
     shape_clipper: ShapeClipper | None = None,
 ) -> dict | None:
@@ -647,7 +681,7 @@ def _generate_road_mesh(
     Each clipped segment becomes a separate road strip; the first non-empty
     mesh is returned.
     """
-    coords = road.get("coordinates", [])
+    coords = _get_attr_or_key(road, "coordinates", [])
     if len(coords) < 2:
         return None
 
@@ -658,8 +692,10 @@ def _generate_road_mesh(
     points_3d = []
     points_xz = []
     for coord in coords:
-        x, z = transform.geo_to_model(coord["lat"], coord["lon"])
-        elev = _sample_elevation(coord["lat"], coord["lon"], elevation)
+        lat = _get_lat(coord)
+        lon = _get_lon(coord)
+        x, z = transform.geo_to_model(lat, lon)
+        elev = _sample_elevation(lat, lon, elevation)
         y = transform.elevation_to_y(elev, min_elev, elev_range, vertical_scale, size_scale)
         y += road_relief
         points_3d.append([x, y, z])
@@ -705,7 +741,7 @@ def _generate_road_mesh(
             return None
 
         return {
-            "name": road.get("name", "Road"),
+            "name": _get_attr_or_key(road, "name", "Road"),
             "type": "roads",
             "vertices": all_vertices,
             "faces": all_faces,
@@ -718,7 +754,7 @@ def _generate_road_mesh(
         return None
 
     return {
-        "name": road.get("name", "Road"),
+        "name": _get_attr_or_key(road, "name", "Road"),
         "type": "roads",
         "vertices": result["vertices"],
         "faces": result["faces"],
@@ -726,7 +762,7 @@ def _generate_road_mesh(
 
 
 def _generate_water_mesh(
-    water: dict, elevation: ElevationData, transform: GeoToModelTransform,
+    water, elevation: ElevationData, transform: GeoToModelTransform,
     min_elev: float, elev_range: float, vertical_scale: float, size_scale: float,
     shape_clipper: ShapeClipper | None = None,
 ) -> dict | None:
@@ -735,7 +771,7 @@ def _generate_water_mesh(
     If a shape_clipper is provided, only points inside the shape are kept.
     If fewer than 3 points remain inside, the water body is excluded.
     """
-    coords = water.get("coordinates", [])
+    coords = _get_attr_or_key(water, "coordinates", [])
     if len(coords) < 3:
         return None
 
@@ -743,8 +779,10 @@ def _generate_water_mesh(
     elevs = []
     xz_points = []
     for coord in coords:
-        x, z = transform.geo_to_model(coord["lat"], coord["lon"])
-        elev = _sample_elevation(coord["lat"], coord["lon"], elevation)
+        lat = _get_lat(coord)
+        lon = _get_lon(coord)
+        x, z = transform.geo_to_model(lat, lon)
+        elev = _sample_elevation(lat, lon, elevation)
         elevs.append(elev)
         xz_points.append((x, z))
 
@@ -776,7 +814,7 @@ def _generate_water_mesh(
         return None
 
     return {
-        "name": water.get("name", "Water"),
+        "name": _get_attr_or_key(water, "name", "Water"),
         "type": "water",
         "vertices": result["vertices"],
         "faces": result["faces"],
@@ -784,7 +822,7 @@ def _generate_water_mesh(
 
 
 def _generate_building_mesh(
-    building: dict, elevation: ElevationData, transform: GeoToModelTransform,
+    building, elevation: ElevationData, transform: GeoToModelTransform,
     min_elev: float, elev_range: float, vertical_scale: float, size_scale: float,
     shape_clipper: ShapeClipper | None = None,
     building_shape_gen: BuildingShapeGenerator | None = None,
@@ -794,13 +832,13 @@ def _generate_building_mesh(
     If a shape_clipper is provided, the building's four corners are checked.
     If any corner is outside the shape boundary, the building is excluded.
     """
-    coords = building.get("coordinates", [])
+    coords = _get_attr_or_key(building, "coordinates", [])
     if len(coords) < 3:
         return None
 
     # Get bounding box from coordinates
-    lats = [c["lat"] for c in coords]
-    lons = [c["lon"] for c in coords]
+    lats = [_get_lat(c) for c in coords]
+    lons = [_get_lon(c) for c in coords]
     min_lat, max_lat = min(lats), max(lats)
     min_lon, max_lon = min(lons), max(lons)
 
@@ -834,11 +872,11 @@ def _generate_building_mesh(
 
     # Compute height
     height_scale = 1.0
-    height_mm = building.get("height", 8.0) * height_scale * 0.15 * size_scale
+    height_mm = _get_attr_or_key(building, "height", 8.0) * height_scale * 0.15 * size_scale
     height_mm = max(height_mm, min_size)  # Minimum 1.2mm
 
     # Determine building shape from tags
-    tags = building.get("tags", {})
+    tags = _get_attr_or_key(building, "tags", {})
     gen = building_shape_gen or BuildingShapeGenerator()
     shape_type = gen.determine_building_shape(tags)
 
@@ -846,7 +884,7 @@ def _generate_building_mesh(
     result = gen.generate_building_mesh(x1, x2, base_y, base_y + height_mm, z1, z2, shape_type)
 
     return {
-        "name": building.get("name", "Building"),
+        "name": _get_attr_or_key(building, "name", "Building"),
         "type": "buildings",
         "vertices": result["vertices"],
         "faces": result["faces"],
@@ -854,7 +892,7 @@ def _generate_building_mesh(
 
 
 def generate_gpx_track_mesh(
-    tracks: list[dict],
+    tracks: list,
     elevation: ElevationData,
     bounds: Bounds,
     transform: GeoToModelTransform,
@@ -881,7 +919,7 @@ def generate_gpx_track_mesh(
     all_faces = []
 
     for track in tracks:
-        points = track.get("points", [])
+        points = _get_attr_or_key(track, "points", [])
         if len(points) < 2:
             continue
 
@@ -899,13 +937,16 @@ def generate_gpx_track_mesh(
         # Y is set to terrain_y + radius so bottom of cylinder rests on terrain
         track_points = []
         for pt in sampled:
-            x, z = transform.geo_to_model(pt["lat"], pt["lon"])
+            lat = _get_lat(pt)
+            lon = _get_lon(pt)
+            x, z = transform.geo_to_model(lat, lon)
 
             # Use GPX elevation if available, otherwise sample from DEM
-            if pt.get("elevation", 0) > 0:
-                elev = pt["elevation"]
+            pt_elev = _get_attr_or_key(pt, "elevation", 0)
+            if pt_elev and pt_elev > 0:
+                elev = pt_elev
             else:
-                elev = _sample_elevation(pt["lat"], pt["lon"], elevation)
+                elev = _sample_elevation(lat, lon, elevation)
 
             y = transform.elevation_to_y(elev, min_elev, elev_range, vertical_scale, size_scale)
             y += cylinder_radius  # Center of cylinder at terrain + radius
