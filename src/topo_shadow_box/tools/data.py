@@ -7,6 +7,7 @@ from mcp.server.fastmcp import FastMCP
 from ..state import state, ElevationData
 from ..core.elevation import fetch_terrain_elevation
 from ..core.osm import fetch_osm_features
+from ._prereqs import require_state
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +24,10 @@ def register_data_tools(mcp: FastMCP):
         Args:
             resolution: Grid size (points per axis). Default 200. Higher = more detail but slower.
         """
-        if not state.bounds.is_set:
-            return "Error: Set an area first with set_area_from_coordinates or set_area_from_gpx."
+        try:
+            require_state(state, bounds=True)
+        except ValueError as e:
+            return f"Error: {e}"
 
         b = state.bounds
         result = await fetch_terrain_elevation(
@@ -61,8 +64,10 @@ def register_data_tools(mcp: FastMCP):
             include: Feature types to fetch. Options: roads, water, buildings.
                      Default: all three.
         """
-        if not state.bounds.is_set:
-            return "Error: Set an area first with set_area_from_coordinates or set_area_from_gpx."
+        try:
+            require_state(state, bounds=True)
+        except ValueError as e:
+            return f"Error: {e}"
 
         if include is None:
             include = ["roads", "water", "buildings"]

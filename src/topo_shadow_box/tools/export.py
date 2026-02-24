@@ -8,6 +8,7 @@ from ..state import state
 from ..exporters.threemf import export_3mf as do_export_3mf
 from ..exporters.openscad import export_openscad as do_export_openscad
 from ..exporters.svg import export_svg as do_export_svg
+from ._prereqs import require_state
 
 
 def _validate_output_path(output_path: str) -> None:
@@ -92,8 +93,10 @@ def register_export_tools(mcp: FastMCP):
         Args:
             output_path: Where to save the .3mf file (absolute path)
         """
-        if not state.terrain_mesh:
-            return "Error: Generate a model first."
+        try:
+            require_state(state, mesh=True)
+        except ValueError as e:
+            return f"Error: {e}"
 
         meshes = _collect_meshes()
         if not meshes:
@@ -118,8 +121,10 @@ def register_export_tools(mcp: FastMCP):
         Args:
             output_path: Where to save the .scad file (absolute path)
         """
-        if not state.terrain_mesh:
-            return "Error: Generate a model first."
+        try:
+            require_state(state, mesh=True)
+        except ValueError as e:
+            return f"Error: {e}"
 
         meshes = _collect_meshes()
         if not meshes:
@@ -148,8 +153,10 @@ def register_export_tools(mcp: FastMCP):
         Args:
             output_path: Where to save the .svg file (absolute path)
         """
-        if not state.bounds.is_set:
-            return "Error: Set an area first."
+        try:
+            require_state(state, bounds=True)
+        except ValueError as e:
+            return f"Error: {e}"
 
         try:
             _validate_output_path(output_path)

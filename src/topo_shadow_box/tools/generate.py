@@ -6,6 +6,7 @@ from ..state import state, MeshData
 from ..core.mesh import generate_terrain_mesh, generate_feature_meshes, generate_gpx_track_mesh, _elevation_normalization
 from ..core.map_insert import generate_map_insert_svg, generate_map_insert_plate
 from ..core.coords import GeoToModelTransform
+from ._prereqs import require_state
 
 
 def register_generate_tools(mcp: FastMCP):
@@ -17,10 +18,10 @@ def register_generate_tools(mcp: FastMCP):
         Requires: area set + elevation fetched. Features and GPX tracks are optional.
         Generates: terrain mesh, feature meshes, and GPX track mesh.
         """
-        if not state.bounds.is_set:
-            return "Error: Set an area first."
-        if not state.elevation.is_set:
-            return "Error: Fetch elevation data first."
+        try:
+            require_state(state, bounds=True, elevation=True)
+        except ValueError as e:
+            return f"Error: {e}"
 
         b = state.bounds
         mp = state.model_params
@@ -110,8 +111,10 @@ def register_generate_tools(mcp: FastMCP):
         Args:
             format: 'svg' for paper map, 'plate' for 3D-printable flat plate, 'both' for both.
         """
-        if not state.bounds.is_set:
-            return "Error: Set an area first."
+        try:
+            require_state(state, bounds=True)
+        except ValueError as e:
+            return f"Error: {e}"
         if format not in ("svg", "plate", "both"):
             return "Error: format must be 'svg', 'plate', or 'both'."
 
