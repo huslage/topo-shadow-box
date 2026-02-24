@@ -8,6 +8,7 @@ from scipy.spatial import cKDTree
 from ..state import Bounds, ElevationData
 from .coords import GeoToModelTransform
 from .building_shapes import BuildingShapeGenerator
+from .models import MeshResult
 from .shape_clipper import (
     CircleClipper,
     HexagonClipper,
@@ -129,7 +130,7 @@ def generate_terrain_mesh(
     vertical_scale: float = 1.5,
     base_height_mm: float = 10.0,
     shape: str = "square",
-) -> dict:
+) -> MeshResult:
     """Generate terrain mesh from elevation grid.
 
     Produces shape-aware bases:
@@ -190,19 +191,20 @@ def generate_terrain_mesh(
                 terrain_faces.append([idx_r, idx_d, idx_dr])
 
     if shape == "circle":
-        return _generate_circle_terrain(
+        result = _generate_circle_terrain(
             top_verts, terrain_faces, rows, cols, cx, cz, radius,
             inside, base_height_mm,
         )
     elif shape == "hexagon":
-        return _generate_hexagon_terrain(
+        result = _generate_hexagon_terrain(
             top_verts, terrain_faces, rows, cols, cx, cz,
             inside, base_height_mm, hex_clipper,
         )
     else:
-        return _generate_square_terrain(
+        result = _generate_square_terrain(
             top_verts, terrain_faces, rows, cols, n, base_height_mm,
         )
+    return MeshResult(vertices=result["vertices"], faces=result["faces"], name="Terrain", feature_type="terrain")
 
 
 def _generate_square_terrain(
@@ -571,12 +573,12 @@ def generate_feature_meshes(
     transform: GeoToModelTransform,
     vertical_scale: float = 1.5,
     shape: str = "square",
-) -> list[dict]:
+) -> list[MeshResult]:
     """Generate meshes for OSM features (roads, water, buildings).
 
     Features are clipped to the model shape boundary for non-square shapes.
 
-    Returns list of dicts with: name, type, vertices, faces.
+    Returns list of MeshResult with: name, feature_type, vertices, faces.
     """
     min_elev, elev_range = _elevation_normalization(elevation.grid)
     model_width = max(transform.model_width_x, transform.model_width_z)
@@ -594,7 +596,12 @@ def generate_feature_meshes(
             vertical_scale, size_scale, shape_clipper=clipper,
         )
         if road_mesh:
-            meshes.append(road_mesh)
+            meshes.append(MeshResult(
+                vertices=road_mesh["vertices"],
+                faces=road_mesh["faces"],
+                name=road_mesh.get("name", "Road"),
+                feature_type="road",
+            ))
 
     # Water: solid polygons at water level
     for water in features.get("water", [])[:50]:
@@ -603,7 +610,12 @@ def generate_feature_meshes(
             vertical_scale, size_scale, shape_clipper=clipper,
         )
         if water_mesh:
-            meshes.append(water_mesh)
+            meshes.append(MeshResult(
+                vertices=water_mesh["vertices"],
+                faces=water_mesh["faces"],
+                name=water_mesh.get("name", "Water"),
+                feature_type="water",
+            ))
 
     # Buildings: shape-aware extruded footprints
     building_gen = BuildingShapeGenerator()
@@ -614,7 +626,12 @@ def generate_feature_meshes(
             building_shape_gen=building_gen,
         )
         if building_mesh:
-            meshes.append(building_mesh)
+            meshes.append(MeshResult(
+                vertices=building_mesh["vertices"],
+                faces=building_mesh["faces"],
+                name=building_mesh.get("name", "Building"),
+                feature_type="building",
+            ))
 
     return meshes
 
@@ -843,7 +860,7 @@ def generate_gpx_track_mesh(
     transform: GeoToModelTransform,
     vertical_scale: float = 1.5,
     shape: str = "square",
-) -> dict | None:
+) -> MeshResult | None:
     """Generate a GPX track as a cylindrical tube above the terrain.
 
     GPX tracks are NOT clipped to shape boundaries per convention
@@ -909,12 +926,12 @@ def generate_gpx_track_mesh(
     if not all_vertices:
         return None
 
-    return {
-        "vertices": all_vertices,
-        "faces": all_faces,
-        "name": "GPX Track",
-        "type": "gpx_track",
-    }
+    return MeshResult(
+        vertices=all_vertices,
+        faces=all_faces,
+        name="GPX Track",
+        feature_type="gpx_track",
+    )
 
 
 def create_gpx_cylinder_track(centerline, radius=1.0, n_sides=8):

@@ -146,8 +146,8 @@ class TestFeatureMeshes:
         meshes = generate_feature_meshes(
             features, self.elevation, self.bounds, self.transform, 1.5, "square")
         assert len(meshes) == 1
-        assert len(meshes[0]["vertices"]) >= 8
-        assert len(meshes[0]["faces"]) >= 12
+        assert len(meshes[0].vertices) >= 8
+        assert len(meshes[0].faces) >= 12
 
     def test_water_is_watertight(self):
         features = {"water": [{"coordinates": [
@@ -157,8 +157,8 @@ class TestFeatureMeshes:
         meshes = generate_feature_meshes(
             features, self.elevation, self.bounds, self.transform, 1.5, "square")
         assert len(meshes) == 1
-        assert len(meshes[0]["vertices"]) == 8
-        assert len(meshes[0]["faces"]) == 12
+        assert len(meshes[0].vertices) == 8
+        assert len(meshes[0].faces) == 12
 
     def test_building_shape_aware(self):
         features = {"buildings": [{"coordinates": [
@@ -169,7 +169,7 @@ class TestFeatureMeshes:
         meshes = generate_feature_meshes(
             features, self.elevation, self.bounds, self.transform, 1.5, "square")
         assert len(meshes) == 1
-        assert len(meshes[0]["vertices"]) == 17  # steeple
+        assert len(meshes[0].vertices) == 17  # steeple
 
     def test_feature_limits(self):
         features = {"roads": [
@@ -196,14 +196,14 @@ class TestTerrainMeshShapeAware:
     def test_square_terrain(self):
         mesh = generate_terrain_mesh(
             self.elevation, self.bounds, self.transform, 1.5, 10.0, "square")
-        assert len(mesh["vertices"]) > 0
-        assert len(mesh["faces"]) > 0
+        assert len(mesh.vertices) > 0
+        assert len(mesh.faces) > 0
 
     def test_circle_terrain_valid_indices(self):
         mesh = generate_terrain_mesh(
             self.elevation, self.bounds, self.transform, 1.5, 10.0, "circle")
-        n_verts = len(mesh["vertices"])
-        for face in mesh["faces"]:
+        n_verts = len(mesh.vertices)
+        for face in mesh.faces:
             for idx in face:
                 assert 0 <= idx < n_verts
 
@@ -211,22 +211,22 @@ class TestTerrainMeshShapeAware:
         ci = generate_terrain_mesh(
             self.elevation, self.bounds, self.transform, 1.5, 10.0, "circle")
         # Circle clips to boundary, resulting in a valid non-empty mesh
-        assert len(ci["vertices"]) > 0
-        assert len(ci["faces"]) > 0
+        assert len(ci.vertices) > 0
+        assert len(ci.faces) > 0
 
     def test_hexagon_terrain_valid_indices(self):
         mesh = generate_terrain_mesh(
             self.elevation, self.bounds, self.transform, 1.5, 10.0, "hexagon")
-        n_verts = len(mesh["vertices"])
-        for face in mesh["faces"]:
+        n_verts = len(mesh.vertices)
+        for face in mesh.faces:
             for idx in face:
                 assert 0 <= idx < n_verts
 
     def test_hexagon_terrain_has_faces(self):
         mesh = generate_terrain_mesh(
             self.elevation, self.bounds, self.transform, 1.5, 10.0, "hexagon")
-        assert len(mesh["vertices"]) > 0
-        assert len(mesh["faces"]) > 0
+        assert len(mesh.vertices) > 0
+        assert len(mesh.faces) > 0
 
 
 class TestFeatureClipping:
@@ -344,7 +344,7 @@ class TestFeatureClipping:
         result = generate_gpx_track_mesh(
             tracks, self.elevation, self.bounds, self.transform, 1.5, shape="circle")
         assert result is not None
-        assert len(result["vertices"]) > 0
+        assert len(result.vertices) > 0
 
 
 class TestElevationNormalization:

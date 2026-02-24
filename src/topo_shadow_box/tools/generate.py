@@ -40,15 +40,15 @@ def register_generate_tools(mcp: FastMCP):
             shape=mp.shape,
         )
         state.terrain_mesh = MeshData(
-            vertices=terrain["vertices"],
-            faces=terrain["faces"],
-            name="Terrain",
-            feature_type="terrain",
+            vertices=terrain.vertices,
+            faces=terrain.faces,
+            name=terrain.name,
+            feature_type=terrain.feature_type,
         )
 
         # Generate feature meshes
         state.feature_meshes = []
-        if state.features:
+        if state.features and (state.features.roads or state.features.water or state.features.buildings):
             fmeshes = generate_feature_meshes(
                 features=state.features,
                 elevation=state.elevation,
@@ -59,10 +59,10 @@ def register_generate_tools(mcp: FastMCP):
             )
             for fm in fmeshes:
                 state.feature_meshes.append(MeshData(
-                    vertices=fm["vertices"],
-                    faces=fm["faces"],
-                    name=fm["name"],
-                    feature_type=fm["type"],
+                    vertices=fm.vertices,
+                    faces=fm.faces,
+                    name=fm.name,
+                    feature_type=fm.feature_type,
                 ))
 
         # Generate GPX track mesh
@@ -78,10 +78,10 @@ def register_generate_tools(mcp: FastMCP):
             )
             if gpx:
                 state.gpx_mesh = MeshData(
-                    vertices=gpx["vertices"],
-                    faces=gpx["faces"],
-                    name="GPX Track",
-                    feature_type="gpx_track",
+                    vertices=gpx.vertices,
+                    faces=gpx.faces,
+                    name=gpx.name,
+                    feature_type=gpx.feature_type,
                 )
 
         # Summary
@@ -133,10 +133,10 @@ def register_generate_tools(mcp: FastMCP):
                 plate_thickness_mm=1.0,
             )
             state.map_insert_mesh = MeshData(
-                vertices=plate["vertices"],
-                faces=plate["faces"],
-                name="Map Insert",
-                feature_type="map_insert",
+                vertices=plate.vertices,
+                faces=plate.faces,
+                name=plate.name,
+                feature_type=plate.feature_type,
             )
             results.append("3D plate generated")
 
