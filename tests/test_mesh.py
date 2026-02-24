@@ -379,6 +379,28 @@ class TestElevationNormalization:
         assert abs(rng - 500.0) < 0.1
 
 
+def test_elevation_normalization_is_deterministic():
+    """Same grid always produces the same normalization values."""
+    from topo_shadow_box.core.mesh import _elevation_normalization
+    import numpy as np
+
+    rng = np.random.default_rng(42)
+    grid = rng.random((100, 100)) * 1000
+    result1 = _elevation_normalization(grid)
+    result2 = _elevation_normalization(grid)
+    assert result1 == result2
+
+
+def test_elevation_normalization_nonzero_range_for_varied_grid():
+    """A grid with varied elevations should have positive normalization range."""
+    from topo_shadow_box.core.mesh import _elevation_normalization
+    import numpy as np
+
+    grid = np.linspace(0, 500, 200 * 200).reshape(200, 200)
+    min_e, range_e = _elevation_normalization(grid)
+    assert range_e > 0, "Non-flat grid should have positive range"
+
+
 class TestCreateGpxCylinderTrack:
     """Tests for the watertight GPX cylinder tube generator."""
 

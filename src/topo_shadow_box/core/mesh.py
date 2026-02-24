@@ -573,6 +573,7 @@ def generate_feature_meshes(
     transform: GeoToModelTransform,
     vertical_scale: float = 1.5,
     shape: str = "square",
+    _norm: tuple[float, float] | None = None,
 ) -> list[MeshResult]:
     """Generate meshes for OSM features (roads, water, buildings).
 
@@ -580,7 +581,7 @@ def generate_feature_meshes(
 
     Returns list of MeshResult.
     """
-    min_elev, elev_range = _elevation_normalization(elevation.grid)
+    min_elev, elev_range = _norm if _norm is not None else _elevation_normalization(elevation.grid)
     model_width = max(transform.model_width_x, transform.model_width_z)
     size_scale = model_width / 200.0
 
@@ -898,6 +899,7 @@ def generate_gpx_track_mesh(
     transform: GeoToModelTransform,
     vertical_scale: float = 1.5,
     shape: str = "square",
+    _norm: tuple[float, float] | None = None,
 ) -> MeshResult | None:
     """Generate a GPX track as a cylindrical tube above the terrain.
 
@@ -909,7 +911,7 @@ def generate_gpx_track_mesh(
     centered at terrain_y + radius so the bottom touches terrain and
     the top protrudes 2 * radius above terrain.
     """
-    min_elev, elev_range = _elevation_normalization(elevation.grid)
+    min_elev, elev_range = _norm if _norm is not None else _elevation_normalization(elevation.grid)
     model_width = max(transform.model_width_x, transform.model_width_z)
     size_scale = model_width / 200.0
 

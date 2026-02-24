@@ -3,7 +3,7 @@
 from mcp.server.fastmcp import FastMCP
 
 from ..state import state, MeshData
-from ..core.mesh import generate_terrain_mesh, generate_feature_meshes, generate_gpx_track_mesh
+from ..core.mesh import generate_terrain_mesh, generate_feature_meshes, generate_gpx_track_mesh, _elevation_normalization
 from ..core.map_insert import generate_map_insert_svg, generate_map_insert_plate
 from ..core.coords import GeoToModelTransform
 
@@ -29,6 +29,8 @@ def register_generate_tools(mcp: FastMCP):
             bounds=b,
             model_width_mm=mp.width_mm,
         )
+
+        norm = _elevation_normalization(state.elevation.grid)
 
         # Generate terrain
         terrain = generate_terrain_mesh(
@@ -56,6 +58,7 @@ def register_generate_tools(mcp: FastMCP):
                 transform=transform,
                 vertical_scale=mp.vertical_scale,
                 shape=mp.shape,
+                _norm=norm,
             )
             for fm in fmeshes:
                 state.feature_meshes.append(MeshData(
@@ -75,6 +78,7 @@ def register_generate_tools(mcp: FastMCP):
                 transform=transform,
                 vertical_scale=mp.vertical_scale,
                 shape=mp.shape,
+                _norm=norm,
             )
             if gpx:
                 state.gpx_mesh = MeshData(
