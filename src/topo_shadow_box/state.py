@@ -64,13 +64,13 @@ class ElevationData:
         return self.grid is not None
 
 
-class ModelParams:
-    """Placeholder - will be replaced in Task 9."""
-    def __init__(self):
-        self.width_mm = 200.0
-        self.vertical_scale = 1.5
-        self.base_height_mm = 10.0
-        self.shape = "square"
+class ModelParams(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
+
+    width_mm: float = Field(default=200.0, gt=0)
+    vertical_scale: float = Field(default=1.5, gt=0)
+    base_height_mm: float = Field(default=10.0, gt=0)
+    shape: Literal["square", "circle", "hexagon", "rectangle"] = "square"
 
 
 class Colors:
