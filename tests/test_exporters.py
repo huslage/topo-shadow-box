@@ -201,3 +201,24 @@ class TestExportSVG:
             output_path=out,
         )
         assert os.path.getsize(out) > 0
+
+
+def test_validate_output_path_rejects_outside_home():
+    """_validate_output_path should raise ValueError for paths outside home directory."""
+    from topo_shadow_box.tools.export import _validate_output_path
+    import pytest
+
+    # /etc/ is almost certainly outside home directory
+    with pytest.raises(ValueError, match="outside"):
+        _validate_output_path("/etc/topo_test.3mf")
+
+
+def test_validate_output_path_accepts_home_subdirectory(tmp_path):
+    """_validate_output_path should accept paths inside the home directory."""
+    from topo_shadow_box.tools.export import _validate_output_path
+    from pathlib import Path
+
+    # tmp_path is inside the system temp dir; use a home subdir instead
+    home_subpath = str(Path.home() / "topo_test_output.3mf")
+    # Should not raise
+    _validate_output_path(home_subpath)

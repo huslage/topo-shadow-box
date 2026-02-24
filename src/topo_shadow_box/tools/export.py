@@ -1,12 +1,26 @@
 """Export tools: export_3mf, export_openscad, export_svg."""
 
 import os
+from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from ..state import state
 from ..exporters.threemf import export_3mf as do_export_3mf
 from ..exporters.openscad import export_openscad as do_export_openscad
 from ..exporters.svg import export_svg as do_export_svg
+
+
+def _validate_output_path(output_path: str) -> None:
+    """Raise ValueError if output_path resolves outside the user's home directory."""
+    resolved = Path(output_path).resolve()
+    home = Path.home().resolve()
+    try:
+        resolved.relative_to(home)
+    except ValueError:
+        raise ValueError(
+            f"Output path {output_path!r} is outside the home directory. "
+            "Use a path within your home directory."
+        )
 
 
 def _collect_meshes() -> list[dict]:
@@ -85,6 +99,11 @@ def register_export_tools(mcp: FastMCP):
         if not meshes:
             return "Error: No mesh data to export."
 
+        try:
+            _validate_output_path(output_path)
+        except ValueError as e:
+            return f"Error: {e}"
+
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
         result = do_export_3mf(meshes, output_path, base_height_mm=state.model_params.base_height_mm)
         return f"3MF exported to {output_path} ({result['objects']} objects)"
@@ -106,6 +125,11 @@ def register_export_tools(mcp: FastMCP):
         if not meshes:
             return "Error: No mesh data to export."
 
+        try:
+            _validate_output_path(output_path)
+        except ValueError as e:
+            return f"Error: {e}"
+
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
         do_export_openscad(
             meshes=meshes,
@@ -126,6 +150,11 @@ def register_export_tools(mcp: FastMCP):
         """
         if not state.bounds.is_set:
             return "Error: Set an area first."
+
+        try:
+            _validate_output_path(output_path)
+        except ValueError as e:
+            return f"Error: {e}"
 
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
         do_export_svg(
