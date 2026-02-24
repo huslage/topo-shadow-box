@@ -73,15 +73,25 @@ class ModelParams(BaseModel):
     shape: Literal["square", "circle", "hexagon", "rectangle"] = "square"
 
 
-class Colors:
-    """Placeholder - will be replaced in Task 10."""
-    def __init__(self):
-        self.terrain = "#C8A882"
-        self.water = "#4682B4"
-        self.roads = "#D4C5A9"
-        self.buildings = "#E8D5B7"
-        self.gpx_track = "#FF0000"
-        self.map_insert = "#FFFFFF"
+class Colors(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
+
+    terrain: str = "#C8A882"
+    water: str = "#4682B4"
+    roads: str = "#D4C5A9"
+    buildings: str = "#E8D5B7"
+    gpx_track: str = "#FF0000"
+    map_insert: str = "#FFFFFF"
+
+    @field_validator("terrain", "water", "roads", "buildings", "gpx_track", "map_insert", mode="before")
+    @classmethod
+    def validate_and_normalize_hex(cls, v: str) -> str:
+        if not isinstance(v, str):
+            raise ValueError("Color must be a string")
+        v = v.strip()
+        if not re.match(r'^#[0-9A-Fa-f]{6}$', v):
+            raise ValueError(f"Invalid hex color '{v}'. Must be #RRGGBB format.")
+        return f"#{v[1:].upper()}"
 
     def hex_to_rgb(self, hex_color: str) -> tuple[int, int, int]:
         h = hex_color.lstrip("#")

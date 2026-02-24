@@ -79,3 +79,48 @@ class TestModelParams:
         from topo_shadow_box.state import ModelParams
         with pytest.raises(ValidationError):
             ModelParams(shape="triangle")
+
+
+class TestColors:
+    def test_defaults(self):
+        from topo_shadow_box.state import Colors
+        c = Colors()
+        assert c.terrain == "#C8A882"
+
+    def test_valid_hex_color(self):
+        from topo_shadow_box.state import Colors
+        c = Colors(terrain="#FF0000")
+        assert c.terrain == "#FF0000"
+
+    def test_lowercase_hex_accepted(self):
+        from topo_shadow_box.state import Colors
+        c = Colors(terrain="#ff0000")
+        assert c.terrain == "#FF0000"  # normalized to uppercase
+
+    def test_invalid_hex_missing_hash(self):
+        from topo_shadow_box.state import Colors
+        with pytest.raises(ValidationError):
+            Colors(terrain="FF0000")
+
+    def test_invalid_hex_wrong_length(self):
+        from topo_shadow_box.state import Colors
+        with pytest.raises(ValidationError):
+            Colors(terrain="#FFF")
+
+    def test_invalid_hex_non_hex_chars(self):
+        from topo_shadow_box.state import Colors
+        with pytest.raises(ValidationError):
+            Colors(terrain="#GGGGGG")
+
+    def test_hex_to_rgb(self):
+        from topo_shadow_box.state import Colors
+        c = Colors(terrain="#FF8040")
+        assert c.hex_to_rgb(c.terrain) == (255, 128, 64)
+
+    def test_as_dict(self):
+        from topo_shadow_box.state import Colors
+        c = Colors()
+        d = c.as_dict()
+        assert "terrain" in d
+        assert "water" in d
+        assert len(d) == 6
