@@ -57,7 +57,7 @@ class GeoToModelTransform:
         return ((clamped - min_elev) / elev_range) * 20.0 * size_scale * vertical_scale
 
 
-def add_padding_to_bounds(bounds: Bounds, padding_m: float) -> Bounds:
+def add_padding_to_bounds(bounds: Bounds, padding_m: float, is_set: bool = False) -> Bounds:
     """Add padding in meters around a bounding box."""
     # 1 degree latitude ~ 111,000 meters
     lat_padding = padding_m / 111_000.0
@@ -70,4 +70,5 @@ def add_padding_to_bounds(bounds: Bounds, padding_m: float) -> Bounds:
         south=bounds.south - lat_padding,
         east=bounds.east + lon_padding,
         west=bounds.west - lon_padding,
+        is_set=is_set,
     )

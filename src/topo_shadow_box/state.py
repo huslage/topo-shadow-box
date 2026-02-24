@@ -4,21 +4,32 @@ Holds all data for the current shadow box: area bounds, elevation grid,
 OSM features, GPX tracks, model parameters, generated meshes, etc.
 """
 
-from dataclasses import dataclass, field
-from typing import Optional
+import re
+from typing import Optional, Literal
 import numpy as np
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
 
-@dataclass
-class Bounds:
-    north: float = 0.0
-    south: float = 0.0
-    east: float = 0.0
-    west: float = 0.0
+class Bounds(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
 
-    @property
-    def is_set(self) -> bool:
-        return not (self.north == 0 and self.south == 0 and self.east == 0 and self.west == 0)
+    north: float = Field(default=0.0, ge=-90, le=90)
+    south: float = Field(default=0.0, ge=-90, le=90)
+    east: float = Field(default=0.0, ge=-180, le=180)
+    west: float = Field(default=0.0, ge=-180, le=180)
+    is_set: bool = False
+
+    @model_validator(mode="after")
+    def check_north_gt_south(self) -> "Bounds":
+        if self.is_set and self.north <= self.south:
+            raise ValueError(f"north ({self.north}) must be greater than south ({self.south})")
+        return self
+
+    @model_validator(mode="after")
+    def check_east_gt_west(self) -> "Bounds":
+        if self.is_set and self.east <= self.west:
+            raise ValueError(f"east ({self.east}) must be greater than west ({self.west})")
+        return self
 
     @property
     def lat_range(self) -> float:
@@ -37,44 +48,44 @@ class Bounds:
         return (self.east + self.west) / 2
 
 
-@dataclass
 class ElevationData:
-    grid: Optional[np.ndarray] = None
-    lats: Optional[np.ndarray] = None
-    lons: Optional[np.ndarray] = None
-    resolution: int = 200
-    min_elevation: float = 0.0
-    max_elevation: float = 0.0
+    """Placeholder - will be replaced in Task 11."""
+    def __init__(self, grid=None, lats=None, lons=None, resolution=200,
+                 min_elevation=0.0, max_elevation=0.0):
+        self.grid = grid
+        self.lats = lats
+        self.lons = lons
+        self.resolution = resolution
+        self.min_elevation = min_elevation
+        self.max_elevation = max_elevation
 
     @property
     def is_set(self) -> bool:
         return self.grid is not None
 
 
-@dataclass
 class ModelParams:
-    width_mm: float = 200.0
-    vertical_scale: float = 1.5
-    base_height_mm: float = 10.0
-    shape: str = "square"  # square, circle, rectangle, hexagon
+    """Placeholder - will be replaced in Task 9."""
+    def __init__(self):
+        self.width_mm = 200.0
+        self.vertical_scale = 1.5
+        self.base_height_mm = 10.0
+        self.shape = "square"
 
 
-@dataclass
 class Colors:
-    terrain: str = "#C8A882"       # Tan
-    water: str = "#4682B4"         # SteelBlue
-    roads: str = "#D4C5A9"         # Light sand
-    buildings: str = "#E8D5B7"     # Cream
-    gpx_track: str = "#FF0000"     # Red
-    map_insert: str = "#FFFFFF"    # White
+    """Placeholder - will be replaced in Task 10."""
+    def __init__(self):
+        self.terrain = "#C8A882"
+        self.water = "#4682B4"
+        self.roads = "#D4C5A9"
+        self.buildings = "#E8D5B7"
+        self.gpx_track = "#FF0000"
+        self.map_insert = "#FFFFFF"
 
     def hex_to_rgb(self, hex_color: str) -> tuple[int, int, int]:
-        hex_color = hex_color.lstrip("#")
-        return (
-            int(hex_color[0:2], 16),
-            int(hex_color[2:4], 16),
-            int(hex_color[4:6], 16),
-        )
+        h = hex_color.lstrip("#")
+        return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
 
     def as_dict(self) -> dict[str, str]:
         return {
@@ -87,44 +98,33 @@ class Colors:
         }
 
 
-@dataclass
 class MeshData:
-    """Holds generated mesh vertices and faces."""
-    vertices: list = field(default_factory=list)
-    faces: list = field(default_factory=list)
-    name: str = ""
-    feature_type: str = ""
+    """Placeholder - will be replaced in Task 11."""
+    def __init__(self, vertices=None, faces=None, name="", feature_type=""):
+        self.vertices = vertices or []
+        self.faces = faces or []
+        self.name = name
+        self.feature_type = feature_type
 
 
-@dataclass
 class SessionState:
-    """Complete session state for a shadow box generation."""
-
-    # Area of interest
-    bounds: Bounds = field(default_factory=Bounds)
-
-    # Data
-    elevation: ElevationData = field(default_factory=ElevationData)
-    features: dict = field(default_factory=dict)  # {roads: [...], water: [...], buildings: [...]}
-    gpx_tracks: list = field(default_factory=list)  # [{name, points: [{lat, lon, elevation}]}]
-    gpx_waypoints: list = field(default_factory=list)
-
-    # Parameters
-    model_params: ModelParams = field(default_factory=ModelParams)
-    colors: Colors = field(default_factory=Colors)
-
-    # Generated meshes
-    terrain_mesh: Optional[MeshData] = None
-    feature_meshes: list = field(default_factory=list)  # [MeshData, ...]
-    gpx_mesh: Optional[MeshData] = None
-    map_insert_mesh: Optional[MeshData] = None
-
-    # Preview server state
-    preview_port: int = 3333
-    preview_running: bool = False
+    """Placeholder - will be replaced in Task 12."""
+    def __init__(self):
+        self.bounds = Bounds()
+        self.elevation = ElevationData()
+        self.features = {}
+        self.gpx_tracks = []
+        self.gpx_waypoints = []
+        self.model_params = ModelParams()
+        self.colors = Colors()
+        self.terrain_mesh = None
+        self.feature_meshes = []
+        self.gpx_mesh = None
+        self.map_insert_mesh = None
+        self.preview_port = 3333
+        self.preview_running = False
 
     def summary(self) -> dict:
-        """Return a summary of the current state for get_status."""
         return {
             "area": {
                 "bounds_set": self.bounds.is_set,

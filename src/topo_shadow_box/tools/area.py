@@ -28,9 +28,10 @@ def register_area_tools(mcp: FastMCP):
             bounds = add_padding_to_bounds(
                 Bounds(north=lat, south=lat, east=lon, west=lon),
                 padding_m=radius_m,
+                is_set=True,
             )
         elif all(v is not None for v in [north, south, east, west]):
-            bounds = Bounds(north=north, south=south, east=east, west=west)
+            bounds = Bounds(north=north, south=south, east=east, west=west, is_set=True)
         else:
             return "Error: Provide either (lat, lon, radius_m) or (north, south, east, west)."
 
@@ -65,7 +66,7 @@ def register_area_tools(mcp: FastMCP):
 
         b = gpx_data["bounds"]
         raw_bounds = Bounds(north=b["north"], south=b["south"], east=b["east"], west=b["west"])
-        padded = add_padding_to_bounds(raw_bounds, padding_m=padding_m)
+        padded = add_padding_to_bounds(raw_bounds, padding_m=padding_m, is_set=True)
 
         state.bounds = padded
         state.gpx_tracks = gpx_data["tracks"]
