@@ -90,3 +90,102 @@ class TestExport3MF:
         result = export_3mf([_minimal_mesh()], out)
         assert result["filepath"] == out
         assert os.path.exists(out)
+
+
+# ── OpenSCAD tests ────────────────────────────────────────────────────────────
+
+class TestExportOpenSCAD:
+    def _model_params(self):
+        from topo_shadow_box.state import ModelParams
+        return ModelParams(width_mm=200.0, vertical_scale=1.5, base_height_mm=10.0, shape="square")
+
+    def test_output_file_is_created(self, tmp_path):
+        from topo_shadow_box.exporters.openscad import export_openscad
+        out = str(tmp_path / "test.scad")
+        export_openscad([_minimal_mesh()], out, self._model_params())
+        assert os.path.exists(out)
+        assert os.path.getsize(out) > 0
+
+    def test_contains_polyhedron_calls(self, tmp_path):
+        from topo_shadow_box.exporters.openscad import export_openscad
+        out = str(tmp_path / "test.scad")
+        export_openscad([_minimal_mesh()], out, self._model_params())
+        content = open(out).read()
+        assert "polyhedron(" in content
+
+    def test_contains_parameter_block(self, tmp_path):
+        from topo_shadow_box.exporters.openscad import export_openscad
+        out = str(tmp_path / "test.scad")
+        export_openscad([_minimal_mesh()], out, self._model_params())
+        content = open(out).read()
+        assert "model_width" in content
+        assert "vertical_scale" in content
+
+    def test_contains_color_call(self, tmp_path):
+        from topo_shadow_box.exporters.openscad import export_openscad
+        out = str(tmp_path / "test.scad")
+        export_openscad([_minimal_mesh()], out, self._model_params())
+        content = open(out).read()
+        assert "color(" in content
+
+    def test_multiple_meshes_produce_multiple_polyhedrons(self, tmp_path):
+        from topo_shadow_box.exporters.openscad import export_openscad
+        meshes = [_minimal_mesh("a"), _minimal_mesh("b")]
+        out = str(tmp_path / "multi.scad")
+        export_openscad(meshes, out, self._model_params())
+        content = open(out).read()
+        assert content.count("polyhedron(") == 2
+
+
+# ── SVG tests ─────────────────────────────────────────────────────────────────
+
+class TestExportSVG:
+    def _bounds(self):
+        from topo_shadow_box.state import Bounds
+        return Bounds(north=37.8, south=37.75, east=-122.4, west=-122.45, is_set=True)
+
+    def _colors(self):
+        from topo_shadow_box.state import Colors
+        return Colors()
+
+    def test_output_file_is_created(self, tmp_path):
+        from topo_shadow_box.exporters.svg import export_svg
+        from topo_shadow_box.core.models import OsmFeatureSet
+        out = str(tmp_path / "test.svg")
+        export_svg(
+            bounds=self._bounds(),
+            features=OsmFeatureSet(),
+            gpx_tracks=[],
+            colors=self._colors(),
+            output_path=out,
+        )
+        assert os.path.exists(out)
+
+    def test_output_is_valid_xml(self, tmp_path):
+        from topo_shadow_box.exporters.svg import export_svg
+        from topo_shadow_box.core.models import OsmFeatureSet
+        import xml.etree.ElementTree as ET
+        out = str(tmp_path / "test.svg")
+        export_svg(
+            bounds=self._bounds(),
+            features=OsmFeatureSet(),
+            gpx_tracks=[],
+            colors=self._colors(),
+            output_path=out,
+        )
+        tree = ET.parse(out)
+        root = tree.getroot()
+        assert "svg" in root.tag.lower()
+
+    def test_output_is_nonempty(self, tmp_path):
+        from topo_shadow_box.exporters.svg import export_svg
+        from topo_shadow_box.core.models import OsmFeatureSet
+        out = str(tmp_path / "test.svg")
+        export_svg(
+            bounds=self._bounds(),
+            features=OsmFeatureSet(),
+            gpx_tracks=[],
+            colors=self._colors(),
+            output_path=out,
+        )
+        assert os.path.getsize(out) > 0
