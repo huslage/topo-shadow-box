@@ -1,10 +1,14 @@
 """Data acquisition tools: fetch_elevation, fetch_features."""
 
+import logging
+
 from mcp.server.fastmcp import FastMCP
 
 from ..state import state, ElevationData
 from ..core.elevation import fetch_terrain_elevation
 from ..core.osm import fetch_osm_features
+
+logger = logging.getLogger(__name__)
 
 
 def register_data_tools(mcp: FastMCP):
@@ -79,6 +83,8 @@ def register_data_tools(mcp: FastMCP):
                 "roads": len(features.roads),
                 "water": len(features.water),
                 "buildings": len(features.buildings),
-            }.items() if v > 0
+            }.items() if k in include
         }
+        if all(v == 0 for v in counts.values()):
+            return f"Features fetched: none found (check server logs if unexpected) — {counts}"
         return f"Features fetched: {counts}"
