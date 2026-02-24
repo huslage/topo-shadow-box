@@ -5,9 +5,60 @@ from .coords import GeoToModelTransform
 from .models import MeshResult
 
 
+def _get_feature_list(features, key):
+    """Get a feature list from OsmFeatureSet or dict."""
+    if hasattr(features, key):
+        return getattr(features, key)
+    elif isinstance(features, dict):
+        return features.get(key, [])
+    return []
+
+
+def _get_coords(feature):
+    """Get coordinates from typed feature or dict."""
+    if hasattr(feature, "coordinates"):
+        return feature.coordinates
+    return feature.get("coordinates", [])
+
+
+def _get_coord_lat(coord):
+    """Get lat from Coordinate or dict."""
+    if hasattr(coord, "lat"):
+        return coord.lat
+    return coord["lat"]
+
+
+def _get_coord_lon(coord):
+    """Get lon from Coordinate or dict."""
+    if hasattr(coord, "lon"):
+        return coord.lon
+    return coord["lon"]
+
+
+def _get_track_points(track):
+    """Get points from GpxTrack or dict."""
+    if hasattr(track, "points"):
+        return track.points
+    return track.get("points", [])
+
+
+def _get_point_lat(point):
+    """Get lat from GpxPoint or dict."""
+    if hasattr(point, "lat"):
+        return point.lat
+    return point["lat"]
+
+
+def _get_point_lon(point):
+    """Get lon from GpxPoint or dict."""
+    if hasattr(point, "lon"):
+        return point.lon
+    return point["lon"]
+
+
 def generate_map_insert_svg(
     bounds: Bounds,
-    features: dict,
+    features,
     gpx_tracks: list,
     colors: Colors,
 ) -> str:
@@ -37,35 +88,51 @@ def generate_map_insert_svg(
     ]
 
     # Water bodies
-    for water in features.get("water", []):
-        coords = water.get("coordinates", [])
+    for water in _get_feature_list(features, "water"):
+        coords = _get_coords(water)
         if len(coords) < 3:
             continue
-        points = " ".join(f"{geo_to_svg(c['lat'], c['lon'])[0]:.1f},{geo_to_svg(c['lat'], c['lon'])[1]:.1f}" for c in coords)
+        points = " ".join(
+            f"{geo_to_svg(_get_coord_lat(c), _get_coord_lon(c))[0]:.1f},"
+            f"{geo_to_svg(_get_coord_lat(c), _get_coord_lon(c))[1]:.1f}"
+            for c in coords
+        )
         parts.append(f'<polygon points="{points}" fill="{colors.water}" opacity="0.6"/>')
 
     # Roads
-    for road in features.get("roads", []):
-        coords = road.get("coordinates", [])
+    for road in _get_feature_list(features, "roads"):
+        coords = _get_coords(road)
         if len(coords) < 2:
             continue
-        points = " ".join(f"{geo_to_svg(c['lat'], c['lon'])[0]:.1f},{geo_to_svg(c['lat'], c['lon'])[1]:.1f}" for c in coords)
+        points = " ".join(
+            f"{geo_to_svg(_get_coord_lat(c), _get_coord_lon(c))[0]:.1f},"
+            f"{geo_to_svg(_get_coord_lat(c), _get_coord_lon(c))[1]:.1f}"
+            for c in coords
+        )
         parts.append(f'<polyline points="{points}" fill="none" stroke="{colors.roads}" stroke-width="1" opacity="0.5"/>')
 
     # Buildings
-    for bldg in features.get("buildings", []):
-        coords = bldg.get("coordinates", [])
+    for bldg in _get_feature_list(features, "buildings"):
+        coords = _get_coords(bldg)
         if len(coords) < 3:
             continue
-        points = " ".join(f"{geo_to_svg(c['lat'], c['lon'])[0]:.1f},{geo_to_svg(c['lat'], c['lon'])[1]:.1f}" for c in coords)
+        points = " ".join(
+            f"{geo_to_svg(_get_coord_lat(c), _get_coord_lon(c))[0]:.1f},"
+            f"{geo_to_svg(_get_coord_lat(c), _get_coord_lon(c))[1]:.1f}"
+            for c in coords
+        )
         parts.append(f'<polygon points="{points}" fill="{colors.buildings}" opacity="0.4"/>')
 
     # GPX tracks
     for track in gpx_tracks:
-        pts = track.get("points", [])
+        pts = _get_track_points(track)
         if len(pts) < 2:
             continue
-        points = " ".join(f"{geo_to_svg(p['lat'], p['lon'])[0]:.1f},{geo_to_svg(p['lat'], p['lon'])[1]:.1f}" for p in pts)
+        points = " ".join(
+            f"{geo_to_svg(_get_point_lat(p), _get_point_lon(p))[0]:.1f},"
+            f"{geo_to_svg(_get_point_lat(p), _get_point_lon(p))[1]:.1f}"
+            for p in pts
+        )
         parts.append(f'<polyline points="{points}" fill="none" stroke="{colors.gpx_track}" stroke-width="2"/>')
 
     parts.append("</svg>")
@@ -74,7 +141,7 @@ def generate_map_insert_svg(
 
 def generate_map_insert_plate(
     bounds: Bounds,
-    features: dict,
+    features,
     gpx_tracks: list,
     transform: GeoToModelTransform,
     plate_thickness_mm: float = 1.0,
@@ -84,7 +151,7 @@ def generate_map_insert_plate(
     The plate is a flat rectangle matching the model dimensions, with features
     as very slightly raised regions for visual/tactile effect.
 
-    Returns dict with vertices and faces.
+    Returns MeshResult with vertices and faces.
     """
     w = transform.model_width_x
     h = transform.model_width_z
