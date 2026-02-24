@@ -130,6 +130,7 @@ def generate_terrain_mesh(
     vertical_scale: float = 1.5,
     base_height_mm: float = 10.0,
     shape: str = "square",
+    _norm: tuple[float, float] | None = None,
 ) -> MeshResult:
     """Generate terrain mesh from elevation grid.
 
@@ -145,7 +146,7 @@ def generate_terrain_mesh(
     lons = elevation.lons
     rows, cols = grid.shape
 
-    min_elev, elev_range = _elevation_normalization(grid)
+    min_elev, elev_range = _norm if _norm is not None else _elevation_normalization(grid)
     model_width = max(transform.model_width_x, transform.model_width_z)
     size_scale = model_width / 200.0
 

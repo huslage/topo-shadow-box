@@ -154,10 +154,7 @@ async def fetch_osm_features(
     for i, (feat_name, (query, parse_type)) in enumerate(queries_list):
         if i > 0:
             await asyncio.sleep(1.0)  # OSM rate limit: 1 req/sec
-        try:
-            elements = await _query_overpass(query)
-        except Exception:
-            elements = []
+        elements = await _query_overpass(query)
         if feat_name == "roads":
             road_elements = elements
         elif feat_name == "water":

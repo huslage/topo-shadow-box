@@ -16,8 +16,11 @@ def register_preview_tools(mcp: FastMCP):
         Starts a local HTTP server with WebSocket updates on localhost:3333.
         If the preview is already running, it sends updated mesh data via WebSocket.
         """
-        if not state.terrain_mesh:
-            return "Error: Generate a model first."
+        from ._prereqs import require_state
+        try:
+            require_state(state, mesh=True)
+        except ValueError as e:
+            return f"Error: {e}"
 
         if not state.preview_running:
             await start_preview_server(state)

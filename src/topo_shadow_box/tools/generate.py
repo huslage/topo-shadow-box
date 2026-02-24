@@ -41,6 +41,7 @@ def register_generate_tools(mcp: FastMCP):
             vertical_scale=mp.vertical_scale,
             base_height_mm=mp.base_height_mm,
             shape=mp.shape,
+            _norm=norm,
         )
         state.terrain_mesh = MeshData(
             vertices=terrain.vertices,
