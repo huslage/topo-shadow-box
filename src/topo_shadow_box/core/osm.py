@@ -1,9 +1,13 @@
 """OpenStreetMap feature fetching via Overpass API."""
 
+import logging
+
 import httpx
 
 from .models import OsmFeatureSet
 from topo_shadow_box.models import RoadFeature, WaterFeature, BuildingFeature, Coordinate
+
+logger = logging.getLogger(__name__)
 
 OVERPASS_SERVERS = [
     "https://overpass.kumi.systems/api/interpreter",
@@ -21,8 +25,18 @@ async def _query_overpass(query: str) -> list[dict]:
                 response.raise_for_status()
                 data = response.json()
                 return data.get("elements", [])
-            except Exception:
+            except httpx.TimeoutException as exc:
+                logger.warning("Overpass server %s timed out: %s", server, exc)
                 continue
+            except httpx.HTTPStatusError as exc:
+                logger.warning(
+                    "Overpass server %s returned HTTP %s", server, exc.response.status_code
+                )
+                continue
+            except Exception as exc:
+                logger.warning("Overpass server %s failed: %s", server, exc)
+                continue
+    logger.warning("All Overpass servers failed for query")
     return []
 
 
