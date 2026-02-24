@@ -50,3 +50,6 @@ debug_boundary.py
 *.tif
 *.tiff
 tile_cache/
+
+# Git worktrees
+.worktrees/
