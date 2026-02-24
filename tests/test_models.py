@@ -78,3 +78,83 @@ class TestGpxTrack:
         from topo_shadow_box.models import GpxTrack
         with pytest.raises(ValidationError):
             GpxTrack(name="Empty", points=[])
+
+
+class TestRoadFeature:
+    def test_valid_road(self):
+        from topo_shadow_box.models import RoadFeature, Coordinate
+        r = RoadFeature(
+            id=1,
+            coordinates=[
+                Coordinate(lat=47.6, lon=-122.3),
+                Coordinate(lat=47.7, lon=-122.2),
+            ],
+        )
+        assert r.type == "road"
+        assert r.road_type == ""
+
+    def test_road_requires_at_least_2_coordinates(self):
+        from topo_shadow_box.models import RoadFeature, Coordinate
+        with pytest.raises(ValidationError):
+            RoadFeature(id=1, coordinates=[Coordinate(lat=47.6, lon=-122.3)])
+
+    def test_road_type_literal(self):
+        from topo_shadow_box.models import RoadFeature, Coordinate
+        coords = [Coordinate(lat=47.6, lon=-122.3), Coordinate(lat=47.7, lon=-122.2)]
+        with pytest.raises(ValidationError):
+            RoadFeature(id=1, coordinates=coords, type="building")
+
+
+class TestWaterFeature:
+    def test_valid_water(self):
+        from topo_shadow_box.models import WaterFeature, Coordinate
+        w = WaterFeature(
+            id=2,
+            coordinates=[
+                Coordinate(lat=47.6, lon=-122.3),
+                Coordinate(lat=47.7, lon=-122.2),
+                Coordinate(lat=47.65, lon=-122.1),
+            ],
+        )
+        assert w.type == "water"
+
+    def test_water_requires_at_least_3_coordinates(self):
+        from topo_shadow_box.models import WaterFeature, Coordinate
+        with pytest.raises(ValidationError):
+            WaterFeature(id=2, coordinates=[
+                Coordinate(lat=47.6, lon=-122.3),
+                Coordinate(lat=47.7, lon=-122.2),
+            ])
+
+
+class TestBuildingFeature:
+    def test_valid_building(self):
+        from topo_shadow_box.models import BuildingFeature, Coordinate
+        b = BuildingFeature(
+            id=3,
+            coordinates=[
+                Coordinate(lat=47.6, lon=-122.3),
+                Coordinate(lat=47.61, lon=-122.3),
+                Coordinate(lat=47.61, lon=-122.29),
+            ],
+        )
+        assert b.height == 10.0
+        assert b.type == "building"
+
+    def test_building_height_must_be_positive(self):
+        from topo_shadow_box.models import BuildingFeature, Coordinate
+        coords = [
+            Coordinate(lat=47.6, lon=-122.3),
+            Coordinate(lat=47.61, lon=-122.3),
+            Coordinate(lat=47.61, lon=-122.29),
+        ]
+        with pytest.raises(ValidationError):
+            BuildingFeature(id=3, coordinates=coords, height=0.0)
+
+    def test_building_requires_at_least_3_coordinates(self):
+        from topo_shadow_box.models import BuildingFeature, Coordinate
+        with pytest.raises(ValidationError):
+            BuildingFeature(id=3, coordinates=[
+                Coordinate(lat=47.6, lon=-122.3),
+                Coordinate(lat=47.61, lon=-122.3),
+            ])

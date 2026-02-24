@@ -1,5 +1,7 @@
 """Pydantic domain models for geographic features and GPX data."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -25,3 +27,29 @@ class GpxWaypoint(BaseModel):
 class GpxTrack(BaseModel):
     name: str
     points: list[GpxPoint] = Field(min_length=2)
+
+
+class RoadFeature(BaseModel):
+    id: int
+    type: Literal["road"] = "road"
+    coordinates: list[Coordinate] = Field(min_length=2)
+    tags: dict = Field(default_factory=dict)
+    name: str = ""
+    road_type: str = ""
+
+
+class WaterFeature(BaseModel):
+    id: int
+    type: Literal["water"] = "water"
+    coordinates: list[Coordinate] = Field(min_length=3)
+    tags: dict = Field(default_factory=dict)
+    name: str = ""
+
+
+class BuildingFeature(BaseModel):
+    id: int
+    type: Literal["building"] = "building"
+    coordinates: list[Coordinate] = Field(min_length=3)
+    tags: dict = Field(default_factory=dict)
+    name: str = ""
+    height: float = Field(default=10.0, gt=0)
