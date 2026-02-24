@@ -1,5 +1,6 @@
 """Elevation data fetching from AWS Terrain-RGB tiles (Terrarium format)."""
 
+import logging
 import math
 import numpy as np
 from io import BytesIO
@@ -10,6 +11,8 @@ from scipy import interpolate
 from scipy.ndimage import gaussian_filter
 
 from .models import ElevationResult
+
+logger = logging.getLogger(__name__)
 
 # AWS Terrain Tiles (Mapzen/Tilezen Terrarium format) - free, globally available
 AWS_TERRAIN_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
@@ -108,8 +111,8 @@ async def fetch_terrain_elevation(
                         px = (tx - x_min) * tile_size
                         py = (ty - y_min) * tile_size
                         stitched_elevations[py:py + tile_size, px:px + tile_size] = tile_elevations
-                except Exception:
-                    pass  # Leave zeros for failed tiles
+                except Exception as exc:
+                    logger.warning("Failed to fetch elevation tile %s: %s", url, exc)
 
     # Map tile pixel coordinates to geographic coordinates
     tile_north, tile_west = _tile_to_lat_lon(x_min, y_min, zoom)
