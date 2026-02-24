@@ -59,8 +59,7 @@ async def fetch_terrain_elevation(
 ) -> ElevationResult:
     """Fetch elevation data for a bounding box from AWS Terrain-RGB tiles.
 
-    Returns dict with: grid (ndarray), lats (ndarray), lons (ndarray),
-    min_elevation, max_elevation
+    Returns ElevationResult.
     """
     zoom = _pick_zoom(north, south, east, west)
 

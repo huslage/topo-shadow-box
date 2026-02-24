@@ -138,7 +138,7 @@ def generate_terrain_mesh(
     - circle: smooth 360-segment circular wall with interpolated contour
     - hexagon: boundary-edge-based wall following terrain contour
 
-    Returns dict with 'vertices' and 'faces' (lists of lists).
+    Returns MeshResult.
     """
     grid = elevation.grid
     lats = elevation.lats
@@ -578,7 +578,7 @@ def generate_feature_meshes(
 
     Features are clipped to the model shape boundary for non-square shapes.
 
-    Returns list of MeshResult with: name, feature_type, vertices, faces.
+    Returns list of MeshResult.
     """
     min_elev, elev_range = _elevation_normalization(elevation.grid)
     model_width = max(transform.model_width_x, transform.model_width_z)
