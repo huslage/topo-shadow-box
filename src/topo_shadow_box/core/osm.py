@@ -2,6 +2,9 @@
 
 import httpx
 
+from .models import OsmFeatureSet
+from topo_shadow_box.models import RoadFeature, WaterFeature, BuildingFeature, Coordinate
+
 OVERPASS_SERVERS = [
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass-api.de/api/interpreter",
@@ -40,26 +43,39 @@ def _parse_way_coords(element: dict) -> list[dict]:
     return coords
 
 
-def _parse_features(elements: list[dict], feature_type: str) -> list[dict]:
-    """Parse Overpass elements into simplified feature dicts."""
+def _parse_features(elements: list[dict], feature_type: str) -> list:
+    """Parse Overpass elements into typed feature models."""
     features = []
     for elem in elements:
-        coords = _parse_way_coords(elem)
-        if len(coords) < 2:
+        raw_coords = _parse_way_coords(elem)
+        if len(raw_coords) < 2:
             continue
-
+        coords = [Coordinate(lat=c["lat"], lon=c["lon"]) for c in raw_coords]
         tags = elem.get("tags", {})
-        feature = {
-            "id": elem.get("id"),
-            "type": feature_type,
-            "coordinates": coords,
-            "tags": tags,
-            "name": tags.get("name", f"{feature_type}_{elem.get('id')}"),
-        }
+        name = tags.get("name", f"{feature_type}_{elem.get('id')}")
 
         if feature_type == "road":
-            feature["road_type"] = tags.get("highway", "road")
+            if len(coords) < 2:
+                continue
+            features.append(RoadFeature(
+                id=elem.get("id", 0),
+                coordinates=coords,
+                tags=tags,
+                name=name,
+                road_type=tags.get("highway", "road"),
+            ))
+        elif feature_type == "water":
+            if len(coords) < 3:
+                continue
+            features.append(WaterFeature(
+                id=elem.get("id", 0),
+                coordinates=coords,
+                tags=tags,
+                name=name,
+            ))
         elif feature_type == "building":
+            if len(coords) < 3:
+                continue
             height = 10.0
             if "height" in tags:
                 try:
@@ -71,26 +87,34 @@ def _parse_features(elements: list[dict], feature_type: str) -> list[dict]:
                     height = float(tags["building:levels"]) * 3.0
                 except ValueError:
                     pass
-            feature["height"] = height
-
-        features.append(feature)
+            height = max(height, 0.1)  # ensure gt=0 for BuildingFeature
+            features.append(BuildingFeature(
+                id=elem.get("id", 0),
+                coordinates=coords,
+                tags=tags,
+                name=name,
+                height=height,
+            ))
     return features
 
 
 async def fetch_osm_features(
     north: float, south: float, east: float, west: float,
     feature_types: list[str],
-) -> dict:
+) -> OsmFeatureSet:
     """Fetch OSM features for a bounding box.
 
     Args:
         feature_types: List of types: 'roads', 'water', 'buildings'
 
     Returns:
-        Dict mapping type names to lists of feature dicts.
+        OsmFeatureSet with typed feature lists.
     """
     bbox = f"{south},{west},{north},{east}"
-    results = {}
+
+    road_elements = []
+    water_elements = []
+    building_elements = []
 
     queries = {}
     if "roads" in feature_types:
@@ -114,8 +138,16 @@ async def fetch_osm_features(
     for feat_name, (query, parse_type) in queries.items():
         try:
             elements = await _query_overpass(query)
-            results[feat_name] = _parse_features(elements, parse_type)
         except Exception:
-            results[feat_name] = []
+            elements = []
+        if feat_name == "roads":
+            road_elements = elements
+        elif feat_name == "water":
+            water_elements = elements
+        elif feat_name == "buildings":
+            building_elements = elements
 
-    return results
+    roads = _parse_features(road_elements, "road")[:200]
+    water = _parse_features(water_elements, "water")[:50]
+    buildings = _parse_features(building_elements, "building")[:150]
+    return OsmFeatureSet(roads=roads, water=water, buildings=buildings)

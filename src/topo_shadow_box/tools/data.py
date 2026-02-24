@@ -74,5 +74,11 @@ def register_data_tools(mcp: FastMCP):
         # Clear feature meshes
         state.feature_meshes = []
 
-        counts = {k: len(v) for k, v in features.items() if v}
+        counts = {
+            k: v for k, v in {
+                "roads": len(features.roads),
+                "water": len(features.water),
+                "buildings": len(features.buildings),
+            }.items() if v > 0
+        }
         return f"Features fetched: {counts}"
