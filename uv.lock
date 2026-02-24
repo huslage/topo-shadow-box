@@ -999,6 +999,7 @@ dependencies = [
     { name = "mcp", extra = ["cli"] },
     { name = "numpy" },
     { name = "pillow" },
+    { name = "pydantic" },
     { name = "scipy" },
     { name = "websockets" },
 ]
@@ -1015,6 +1016,7 @@ requires-dist = [
     { name = "mcp", extras = ["cli"], specifier = ">=1.0" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "pillow", specifier = ">=10.0" },
+    { name = "pydantic", specifier = ">=2.0" },
     { name = "scipy", specifier = ">=1.10" },
     { name = "websockets", specifier = ">=12.0" },
 ]
