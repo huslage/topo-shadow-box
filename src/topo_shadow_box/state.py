@@ -9,6 +9,9 @@ from typing import Optional, Literal
 import numpy as np
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
+from topo_shadow_box.core.models import OsmFeatureSet
+from topo_shadow_box.models import GpxTrack, GpxWaypoint
+
 
 class Bounds(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
@@ -111,22 +114,22 @@ class MeshData(BaseModel):
     feature_type: str = ""
 
 
-class SessionState:
-    """Placeholder - will be replaced in Task 12."""
-    def __init__(self):
-        self.bounds = Bounds()
-        self.elevation = ElevationData()
-        self.features = {}
-        self.gpx_tracks = []
-        self.gpx_waypoints = []
-        self.model_params = ModelParams()
-        self.colors = Colors()
-        self.terrain_mesh = None
-        self.feature_meshes = []
-        self.gpx_mesh = None
-        self.map_insert_mesh = None
-        self.preview_port = 3333
-        self.preview_running = False
+class SessionState(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    bounds: Bounds = Field(default_factory=Bounds)
+    elevation: ElevationData = Field(default_factory=ElevationData)
+    features: OsmFeatureSet = Field(default_factory=OsmFeatureSet)
+    gpx_tracks: list[GpxTrack] = []
+    gpx_waypoints: list[GpxWaypoint] = []
+    model_params: ModelParams = Field(default_factory=ModelParams)
+    colors: Colors = Field(default_factory=Colors)
+    terrain_mesh: Optional[MeshData] = None
+    feature_meshes: list[MeshData] = []
+    gpx_mesh: Optional[MeshData] = None
+    map_insert_mesh: Optional[MeshData] = None
+    preview_port: int = Field(default=3333, gt=0, le=65535)
+    preview_running: bool = False
 
     def summary(self) -> dict:
         return {
@@ -140,9 +143,18 @@ class SessionState:
             "data": {
                 "elevation_loaded": self.elevation.is_set,
                 "elevation_resolution": self.elevation.resolution if self.elevation.is_set else None,
-                "elevation_range": f"{self.elevation.min_elevation:.0f}m - {self.elevation.max_elevation:.0f}m" if self.elevation.is_set else None,
-                "features_loaded": bool(self.features),
-                "feature_counts": {k: len(v) for k, v in self.features.items()} if self.features else {},
+                "elevation_range": (
+                    f"{self.elevation.min_elevation:.0f}m - {self.elevation.max_elevation:.0f}m"
+                    if self.elevation.is_set else None
+                ),
+                "features_loaded": bool(
+                    self.features.roads or self.features.water or self.features.buildings
+                ),
+                "feature_counts": {
+                    "roads": len(self.features.roads),
+                    "water": len(self.features.water),
+                    "buildings": len(self.features.buildings),
+                },
                 "gpx_tracks": len(self.gpx_tracks),
             },
             "model": {

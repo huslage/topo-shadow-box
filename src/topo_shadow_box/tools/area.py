@@ -5,6 +5,7 @@ from mcp.server.fastmcp import FastMCP
 from ..state import state, Bounds
 from ..core.gpx import parse_gpx_file
 from ..core.coords import add_padding_to_bounds
+from ..core.models import OsmFeatureSet
 
 
 def register_area_tools(mcp: FastMCP):
@@ -38,7 +39,7 @@ def register_area_tools(mcp: FastMCP):
         state.bounds = bounds
         # Clear downstream data when area changes
         state.elevation = state.elevation.__class__()
-        state.features = {}
+        state.features = OsmFeatureSet()
         state.terrain_mesh = None
         state.feature_meshes = []
         state.gpx_mesh = None
@@ -74,7 +75,7 @@ def register_area_tools(mcp: FastMCP):
 
         # Clear downstream data
         state.elevation = state.elevation.__class__()
-        state.features = {}
+        state.features = OsmFeatureSet()
         state.terrain_mesh = None
         state.feature_meshes = []
         state.gpx_mesh = None

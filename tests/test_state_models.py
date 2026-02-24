@@ -161,3 +161,30 @@ class TestMeshData:
             feature_type="terrain",
         )
         assert len(m.vertices) == 3
+
+
+class TestSessionState:
+    def test_defaults(self):
+        from topo_shadow_box.state import SessionState
+        s = SessionState()
+        assert s.bounds.is_set is False
+        assert s.elevation.is_set is False
+        assert s.gpx_tracks == []
+        assert s.gpx_waypoints == []
+        assert s.terrain_mesh is None
+        assert s.preview_port == 3333
+
+    def test_preview_port_range(self):
+        from topo_shadow_box.state import SessionState
+        with pytest.raises(ValidationError):
+            SessionState(preview_port=0)
+        with pytest.raises(ValidationError):
+            SessionState(preview_port=65536)
+
+    def test_summary_returns_dict(self):
+        from topo_shadow_box.state import SessionState
+        s = SessionState()
+        d = s.summary()
+        assert "area" in d
+        assert "data" in d
+        assert "model" in d
