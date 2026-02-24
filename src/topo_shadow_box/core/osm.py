@@ -18,7 +18,7 @@ OVERPASS_SERVERS = [
 
 async def _query_overpass(query: str) -> list[dict]:
     """Execute an Overpass API query with server fallback."""
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    async with httpx.AsyncClient(timeout=45.0, headers={"User-Agent": "topo-shadow-box/1.0"}) as client:
         for server in OVERPASS_SERVERS:
             try:
                 response = await client.post(server, data={"data": query})

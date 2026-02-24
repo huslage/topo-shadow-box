@@ -135,3 +135,33 @@ async def test_fetch_features_returns_explicit_message_when_empty():
 
     assert "none found" in result, f"Expected 'none found' in result, got: {result!r}"
     assert "check server logs" in result or "unexpected" in result, f"Expected hint in result, got: {result!r}"
+
+
+@pytest.mark.anyio
+async def test_osm_client_sends_user_agent():
+    """OSM HTTP client must include User-Agent header."""
+    from topo_shadow_box.core.osm import _query_overpass
+
+    captured_init_kwargs = {}
+
+    class CapturingClient:
+        def __init__(self, **kwargs):
+            captured_init_kwargs.update(kwargs)
+            self._inner = AsyncMock()
+            mock_resp = MagicMock()
+            mock_resp.raise_for_status = MagicMock()
+            mock_resp.json = MagicMock(return_value={"elements": []})
+            self._inner.post = AsyncMock(return_value=mock_resp)
+
+        async def __aenter__(self):
+            return self._inner
+
+        async def __aexit__(self, *args):
+            pass
+
+    with patch("httpx.AsyncClient", CapturingClient):
+        await _query_overpass("test query")
+
+    assert "headers" in captured_init_kwargs, "httpx.AsyncClient should be initialized with headers"
+    assert "User-Agent" in captured_init_kwargs["headers"], "headers should include User-Agent"
+    assert "topo-shadow-box" in captured_init_kwargs["headers"]["User-Agent"]
