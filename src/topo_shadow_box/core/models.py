@@ -45,3 +45,15 @@ class MeshResult(BaseModel):
                         f"Face {i} references vertex {idx} but only {n_verts} vertices exist"
                     )
         return self
+
+
+class ElevationResult(BaseModel):
+    """Return type for fetch_terrain_elevation."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    grid: np.ndarray
+    lats: np.ndarray
+    lons: np.ndarray
+    resolution: int = Field(gt=0, le=1000)
+    min_elevation: float
+    max_elevation: float
