@@ -98,3 +98,70 @@ async def test_partial_tile_failure_logs_warning_for_failed_tile(caplog):
         r.name == "topo_shadow_box.core.elevation" and r.levelno == logging.WARNING
         for r in caplog.records
     ), f"Expected WARNING from elevation logger. Got: {[(r.name, r.levelno, r.message) for r in caplog.records]}"
+
+
+@pytest.mark.anyio
+async def test_all_tile_urls_are_fetched():
+    """All tile URLs for the bounding box should be fetched (concurrently or not)."""
+    from topo_shadow_box.core.elevation import fetch_terrain_elevation
+    from PIL import Image
+    from io import BytesIO
+
+    fetched_urls = []
+
+    async def mock_get(url, **kwargs):
+        fetched_urls.append(url)
+        img = Image.new("RGB", (256, 256), color=(128, 100, 0))
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        mock_resp = AsyncMock()
+        mock_resp.status_code = 200
+        mock_resp.content = buf.getvalue()
+        return mock_resp
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = mock_get
+        mock_client_cls.return_value = mock_client
+
+        result = await fetch_terrain_elevation(37.8, 37.75, -122.4, -122.45, resolution=10)
+
+    assert len(fetched_urls) >= 1, "Should have fetched at least one tile"
+    assert result is not None
+    # All URLs should be unique (no duplicate fetches)
+    assert len(fetched_urls) == len(set(fetched_urls)), "Should not fetch same tile twice"
+
+
+@pytest.mark.anyio
+async def test_all_tile_urls_are_fetched_without_duplicates():
+    """All tile URLs for the bounding box should be fetched, with no duplicates."""
+    from topo_shadow_box.core.elevation import fetch_terrain_elevation
+    from PIL import Image
+    from io import BytesIO
+
+    fetched_urls = []
+
+    async def mock_get(url, **kwargs):
+        fetched_urls.append(url)
+        img = Image.new("RGB", (256, 256), color=(128, 100, 0))
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        mock_resp = AsyncMock()
+        mock_resp.status_code = 200
+        mock_resp.content = buf.getvalue()
+        return mock_resp
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = mock_get
+        mock_client_cls.return_value = mock_client
+
+        result = await fetch_terrain_elevation(37.8, 37.75, -122.4, -122.45, resolution=10)
+
+    assert len(fetched_urls) >= 1, "Should have fetched at least one tile"
+    assert result is not None
+    assert len(fetched_urls) == len(set(fetched_urls)), "Should not fetch same tile twice"

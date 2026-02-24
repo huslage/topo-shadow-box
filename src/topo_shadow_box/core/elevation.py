@@ -1,5 +1,6 @@
 """Elevation data fetching from AWS Terrain-RGB tiles (Terrarium format)."""
 
+import asyncio
 import logging
 import math
 import numpy as np
@@ -94,25 +95,32 @@ async def fetch_terrain_elevation(
     stitched_height = num_tiles_y * tile_size
     stitched_elevations = np.zeros((stitched_height, stitched_width))
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        for ty in range(y_min, y_max + 1):
-            for tx in range(x_min, x_max + 1):
-                url = AWS_TERRAIN_URL.format(z=zoom, x=tx, y=ty)
-                try:
-                    response = await client.get(url)
-                    if response.status_code == 200:
-                        img = Image.open(BytesIO(response.content))
-                        img_array = np.array(img)
-                        r = img_array[:, :, 0].astype(np.float64)
-                        g = img_array[:, :, 1].astype(np.float64)
-                        b = img_array[:, :, 2].astype(np.float64)
-                        tile_elevations = _decode_terrarium(r, g, b)
+    async with httpx.AsyncClient(timeout=30.0, headers={"User-Agent": "topo-shadow-box/1.0"}) as client:
+        # Collect all tile coordinates
+        tile_coords = [
+            (tx, ty)
+            for ty in range(y_min, y_max + 1)
+            for tx in range(x_min, x_max + 1)
+        ]
 
-                        px = (tx - x_min) * tile_size
-                        py = (ty - y_min) * tile_size
-                        stitched_elevations[py:py + tile_size, px:px + tile_size] = tile_elevations
-                except Exception as exc:
-                    logger.warning("Failed to fetch elevation tile %s: %s", url, exc)
+        async def fetch_tile(tx: int, ty: int) -> None:
+            url = AWS_TERRAIN_URL.format(z=zoom, x=tx, y=ty)
+            try:
+                response = await client.get(url)
+                if response.status_code == 200:
+                    img = Image.open(BytesIO(response.content))
+                    img_array = np.array(img)
+                    r = img_array[:, :, 0].astype(np.float64)
+                    g = img_array[:, :, 1].astype(np.float64)
+                    b = img_array[:, :, 2].astype(np.float64)
+                    tile_elevations = _decode_terrarium(r, g, b)
+                    px = (tx - x_min) * tile_size
+                    py = (ty - y_min) * tile_size
+                    stitched_elevations[py:py + tile_size, px:px + tile_size] = tile_elevations
+            except Exception as exc:
+                logger.warning("Failed to fetch elevation tile %s: %s", url, exc)
+
+        await asyncio.gather(*[fetch_tile(tx, ty) for tx, ty in tile_coords])
 
     # Map tile pixel coordinates to geographic coordinates
     tile_north, tile_west = _tile_to_lat_lon(x_min, y_min, zoom)
