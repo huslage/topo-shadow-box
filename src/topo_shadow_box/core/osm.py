@@ -1,5 +1,6 @@
 """OpenStreetMap feature fetching via Overpass API."""
 
+import asyncio
 import logging
 
 import httpx
@@ -149,7 +150,10 @@ async def fetch_osm_features(
             "building",
         )
 
-    for feat_name, (query, parse_type) in queries.items():
+    queries_list = list(queries.items())
+    for i, (feat_name, (query, parse_type)) in enumerate(queries_list):
+        if i > 0:
+            await asyncio.sleep(1.0)  # OSM rate limit: 1 req/sec
         try:
             elements = await _query_overpass(query)
         except Exception:

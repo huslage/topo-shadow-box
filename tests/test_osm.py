@@ -165,3 +165,35 @@ async def test_osm_client_sends_user_agent():
     assert "headers" in captured_init_kwargs, "httpx.AsyncClient should be initialized with headers"
     assert "User-Agent" in captured_init_kwargs["headers"], "headers should include User-Agent"
     assert "topo-shadow-box" in captured_init_kwargs["headers"]["User-Agent"]
+
+
+@pytest.mark.anyio
+async def test_fetch_osm_features_sleeps_between_queries():
+    """fetch_osm_features should sleep 1s between Overpass queries (OSM rate limit)."""
+    from topo_shadow_box.core.osm import fetch_osm_features
+
+    sleep_calls = []
+
+    async def mock_sleep(seconds):
+        sleep_calls.append(seconds)
+
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json = MagicMock(return_value={"elements": []})
+
+    with patch("asyncio.sleep", side_effect=mock_sleep):
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client.post = AsyncMock(return_value=mock_resp)
+            mock_client_cls.return_value = mock_client
+
+            await fetch_osm_features(
+                north=37.8, south=37.75, east=-122.4, west=-122.45,
+                feature_types=["roads", "water", "buildings"],
+            )
+
+    # 3 feature types → 2 inter-query sleeps minimum
+    assert len(sleep_calls) >= 1, f"Should sleep between OSM queries. Got sleep_calls={sleep_calls}"
+    assert all(s >= 1.0 for s in sleep_calls), f"Each sleep should be >= 1.0s. Got: {sleep_calls}"
