@@ -35,6 +35,7 @@ def register_data_tools(mcp: FastMCP):
             resolution=resolution,
             min_elevation=result["min_elevation"],
             max_elevation=result["max_elevation"],
+            is_set=True,
         )
 
         # Clear meshes since elevation changed

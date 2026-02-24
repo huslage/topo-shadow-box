@@ -48,20 +48,16 @@ class Bounds(BaseModel):
         return (self.east + self.west) / 2
 
 
-class ElevationData:
-    """Placeholder - will be replaced in Task 11."""
-    def __init__(self, grid=None, lats=None, lons=None, resolution=200,
-                 min_elevation=0.0, max_elevation=0.0):
-        self.grid = grid
-        self.lats = lats
-        self.lons = lons
-        self.resolution = resolution
-        self.min_elevation = min_elevation
-        self.max_elevation = max_elevation
+class ElevationData(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    @property
-    def is_set(self) -> bool:
-        return self.grid is not None
+    grid: Optional[np.ndarray] = None
+    lats: Optional[np.ndarray] = None
+    lons: Optional[np.ndarray] = None
+    resolution: int = Field(default=200, gt=0, le=1000)
+    min_elevation: float = 0.0
+    max_elevation: float = 0.0
+    is_set: bool = False
 
 
 class ModelParams(BaseModel):
@@ -108,13 +104,11 @@ class Colors(BaseModel):
         }
 
 
-class MeshData:
-    """Placeholder - will be replaced in Task 11."""
-    def __init__(self, vertices=None, faces=None, name="", feature_type=""):
-        self.vertices = vertices or []
-        self.faces = faces or []
-        self.name = name
-        self.feature_type = feature_type
+class MeshData(BaseModel):
+    vertices: list[list[float]] = Field(default_factory=list)
+    faces: list[list[int]] = Field(default_factory=list)
+    name: str = ""
+    feature_type: str = ""
 
 
 class SessionState:

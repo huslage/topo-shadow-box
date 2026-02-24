@@ -124,3 +124,40 @@ class TestColors:
         assert "terrain" in d
         assert "water" in d
         assert len(d) == 6
+
+
+class TestElevationData:
+    def test_defaults(self):
+        from topo_shadow_box.state import ElevationData
+        e = ElevationData()
+        assert e.is_set is False
+        assert e.grid is None
+
+    def test_resolution_must_be_positive(self):
+        from topo_shadow_box.state import ElevationData
+        with pytest.raises(ValidationError):
+            ElevationData(resolution=0)
+
+    def test_resolution_must_not_exceed_1000(self):
+        from topo_shadow_box.state import ElevationData
+        with pytest.raises(ValidationError):
+            ElevationData(resolution=1001)
+
+
+class TestMeshData:
+    def test_defaults(self):
+        from topo_shadow_box.state import MeshData
+        m = MeshData()
+        assert m.vertices == []
+        assert m.faces == []
+        assert m.name == ""
+
+    def test_with_data(self):
+        from topo_shadow_box.state import MeshData
+        m = MeshData(
+            vertices=[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            faces=[[0, 1, 2]],
+            name="Terrain",
+            feature_type="terrain",
+        )
+        assert len(m.vertices) == 3
