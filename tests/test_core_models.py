@@ -109,12 +109,29 @@ class TestOsmFeatureSet:
         assert fs.water == []
         assert fs.buildings == []
 
-    def test_feature_set_with_data(self):
+    def test_feature_set_with_typed_data(self):
         from topo_shadow_box.core.models import OsmFeatureSet
-        fs = OsmFeatureSet(
-            roads=[{"id": 1}],
-            water=[],
-            buildings=[{"id": 2}, {"id": 3}],
-        )
+        from topo_shadow_box.models import RoadFeature, WaterFeature, Coordinate
+        road = RoadFeature(id=1, coordinates=[
+            Coordinate(lat=47.6, lon=-122.3),
+            Coordinate(lat=47.7, lon=-122.2),
+        ])
+        water = WaterFeature(id=2, coordinates=[
+            Coordinate(lat=47.6, lon=-122.3),
+            Coordinate(lat=47.7, lon=-122.2),
+            Coordinate(lat=47.65, lon=-122.1),
+        ])
+        fs = OsmFeatureSet(roads=[road], water=[water])
         assert len(fs.roads) == 1
-        assert len(fs.buildings) == 2
+        assert len(fs.water) == 1
+
+    def test_rejects_wrong_feature_type_in_roads(self):
+        from topo_shadow_box.core.models import OsmFeatureSet
+        from topo_shadow_box.models import WaterFeature, Coordinate
+        water = WaterFeature(id=2, coordinates=[
+            Coordinate(lat=47.6, lon=-122.3),
+            Coordinate(lat=47.7, lon=-122.2),
+            Coordinate(lat=47.65, lon=-122.1),
+        ])
+        with pytest.raises(ValidationError):
+            OsmFeatureSet(roads=[water])

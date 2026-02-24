@@ -3,6 +3,7 @@
 from typing import Optional
 import numpy as np
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
+from topo_shadow_box.models import RoadFeature, WaterFeature, BuildingFeature
 
 
 class MeshResult(BaseModel):
@@ -60,7 +61,7 @@ class ElevationResult(BaseModel):
 
 
 class OsmFeatureSet(BaseModel):
-    """Return type for fetch_osm_features. Feature lists are typed in Layer 2."""
-    roads: list = []
-    water: list = []
-    buildings: list = []
+    """Return type for fetch_osm_features."""
+    roads: list[RoadFeature] = []
+    water: list[WaterFeature] = []
+    buildings: list[BuildingFeature] = []
