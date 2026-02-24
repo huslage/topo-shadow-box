@@ -432,3 +432,84 @@ class TestCreateGpxCylinderTrack:
         assert len(result["vertices"]) == n_points * n_sides + 2
         # 2 * n_sides * (n_points - 1) wall quads + 2 * n_sides cap tris = 2 * n_sides * n_points
         assert len(result["faces"]) == 2 * n_sides * n_points
+
+
+class TestEdgeCases:
+    """Edge cases for mesh generation."""
+
+    def _make_elevation(self, rows=10, cols=10, value=0.0):
+        """Create an elevation grid with a constant value."""
+        from topo_shadow_box.state import ElevationData
+        import numpy as np
+        grid = np.full((rows, cols), value)
+        return ElevationData(
+            grid=grid,
+            lats=np.linspace(37.75, 37.80, rows),
+            lons=np.linspace(-122.45, -122.40, cols),
+            resolution=rows,
+            min_elevation=float(value),
+            max_elevation=float(value),
+            is_set=True,
+        )
+
+    def _make_bounds(self):
+        from topo_shadow_box.state import Bounds
+        return Bounds(north=37.80, south=37.75, east=-122.40, west=-122.45, is_set=True)
+
+    def test_all_zero_elevation_grid_produces_valid_mesh(self):
+        """An all-zero elevation grid should produce a valid (flat) terrain mesh."""
+        from topo_shadow_box.core.mesh import generate_terrain_mesh
+        from topo_shadow_box.core.coords import GeoToModelTransform
+
+        bounds = self._make_bounds()
+        elev = self._make_elevation(value=0.0)
+        transform = GeoToModelTransform(bounds=bounds, model_width_mm=200.0)
+
+        result = generate_terrain_mesh(
+            elevation=elev, bounds=bounds, transform=transform,
+            vertical_scale=1.5, base_height_mm=10.0, shape="square",
+        )
+        assert len(result.vertices) > 0, "Should produce vertices even for flat terrain"
+        assert len(result.faces) > 0, "Should produce faces even for flat terrain"
+
+    def test_uniform_elevation_grid_produces_flat_top_surface(self):
+        """A constant (non-zero) elevation grid should produce a flat top surface."""
+        from topo_shadow_box.core.mesh import generate_terrain_mesh
+        from topo_shadow_box.core.coords import GeoToModelTransform
+        import numpy as np
+
+        bounds = self._make_bounds()
+        elev = self._make_elevation(value=500.0)
+        transform = GeoToModelTransform(bounds=bounds, model_width_mm=200.0)
+
+        result = generate_terrain_mesh(
+            elevation=elev, bounds=bounds, transform=transform,
+            vertical_scale=1.5, base_height_mm=10.0, shape="square",
+        )
+        verts = np.array(result.vertices)
+        # Top surface vertices (Y >= 0) should all have the same Y value (flat)
+        top_ys = verts[verts[:, 1] >= 0, 1]
+        assert len(top_ys) > 0, "Should have top-surface vertices"
+        assert np.allclose(top_ys, top_ys[0], atol=0.5), (
+            f"Uniform elevation should produce flat top. Y range: {top_ys.min():.3f} to {top_ys.max():.3f}"
+        )
+
+    def test_empty_feature_set_produces_no_feature_meshes(self):
+        """generate_feature_meshes with empty OsmFeatureSet should return empty list."""
+        from topo_shadow_box.core.mesh import generate_feature_meshes
+        from topo_shadow_box.core.models import OsmFeatureSet
+        from topo_shadow_box.core.coords import GeoToModelTransform
+
+        bounds = self._make_bounds()
+        elev = self._make_elevation()
+        transform = GeoToModelTransform(bounds=bounds, model_width_mm=200.0)
+
+        result = generate_feature_meshes(
+            features=OsmFeatureSet(roads=[], water=[], buildings=[]),
+            elevation=elev,
+            bounds=bounds,
+            transform=transform,
+            vertical_scale=1.5,
+            shape="square",
+        )
+        assert len(result) == 0, f"Empty feature set should produce no meshes, got {len(result)}"
