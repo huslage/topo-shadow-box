@@ -86,5 +86,6 @@ def register_data_tools(mcp: FastMCP):
             }.items() if k in include
         }
         if all(v == 0 for v in counts.values()):
+            logger.debug("fetch_features returned zero results for types: %s", include)
             return f"Features fetched: none found (check server logs if unexpected) — {counts}"
         return f"Features fetched: {counts}"
