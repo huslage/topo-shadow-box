@@ -49,7 +49,6 @@ def export_openscad(
         if not verts or not faces:
             continue
 
-        name.replace(" ", "_").replace("-", "_")
         lines.append("")
         lines.append(f"// {name} ({mtype})")
         lines.append(f"color({color})")
