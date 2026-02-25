@@ -2,8 +2,6 @@
 
 An MCP (Model Context Protocol) server that generates 3D-printable topographic shadow boxes. Given a geographic area, it fetches real elevation data and OpenStreetMap features, then produces multi-material 3MF files ready for slicing and printing.
 
-![Shadow box example showing terrain with roads, water, and buildings raised on the surface]
-
 ## Features
 
 - Terrain mesh from AWS Terrain-RGB elevation tiles (free, global coverage)
