@@ -14,6 +14,7 @@ from .tools.generate import register_generate_tools
 from .tools.preview import register_preview_tools
 from .tools.export import register_export_tools
 from .tools.status import register_status_tools
+from .tools.session import register_session_tools
 from .state import state as _state
 
 mcp = FastMCP(
@@ -36,6 +37,7 @@ register_generate_tools(mcp)
 register_preview_tools(mcp)
 register_export_tools(mcp)
 register_status_tools(mcp)
+register_session_tools(mcp)
 
 
 def main():
