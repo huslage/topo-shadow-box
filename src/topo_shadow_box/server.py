@@ -3,6 +3,8 @@
 Registers all tools and runs via stdio transport.
 """
 
+import json as _json
+
 from mcp.server.fastmcp import FastMCP
 
 from .tools.area import register_area_tools
@@ -12,11 +14,19 @@ from .tools.generate import register_generate_tools
 from .tools.preview import register_preview_tools
 from .tools.export import register_export_tools
 from .tools.status import register_status_tools
+from .state import state as _state
 
 mcp = FastMCP(
     "topo-shadow-box",
     instructions="Generate 3D-printed shadow boxes with topographical terrain, map features, and GPX tracks",
 )
+
+
+@mcp.resource("state://session")
+def session_state_resource() -> str:
+    """Current session state: bounds, elevation, features, model params, mesh status."""
+    return _json.dumps(_state.summary(), indent=2)
+
 
 # Register all tool groups
 register_area_tools(mcp)
