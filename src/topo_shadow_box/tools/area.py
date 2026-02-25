@@ -1,5 +1,7 @@
 """Area definition tools: set_area_from_coordinates, set_area_from_gpx."""
 
+import math
+
 from mcp.server.fastmcp import FastMCP
 
 from ..state import state, Bounds, ElevationData
@@ -88,3 +90,48 @@ def register_area_tools(mcp: FastMCP):
             f"E={padded.east:.6f}, W={padded.west:.6f} "
             f"(padding: {padding_m}m)"
         )
+
+    @mcp.tool()
+    def validate_area() -> str:
+        """Check the current area for potential problems before fetching data.
+
+        **Requires:** set_area_from_coordinates or set_area_from_gpx first.
+        **Next:** fetch_elevation, then fetch_features (optional), then generate_model.
+
+        Checks area size, and elevation relief if elevation has been fetched.
+        Returns warnings but does not block the pipeline.
+        """
+        if not state.bounds.is_set:
+            return "Error: Set an area first with set_area_from_coordinates or set_area_from_gpx."
+
+        b = state.bounds
+        # Approximate span in meters (1 degree lat ≈ 111km)
+        lat_m = b.lat_range * 111_000
+        lon_m = b.lon_range * 111_000 * abs(math.cos(math.radians(b.center_lat)))
+        min_span_m = min(lat_m, lon_m)
+        max_span_m = max(lat_m, lon_m)
+
+        warnings = []
+
+        if min_span_m < 100:
+            return (
+                f"Error: Area too small ({min_span_m:.0f}m minimum span). "
+                "Use a larger area for meaningful terrain detail."
+            )
+        if max_span_m > 500_000:
+            warnings.append(
+                f"Very large area ({max_span_m / 1000:.0f}km span) — "
+                "fetching will be slow and terrain detail will be low."
+            )
+
+        if state.elevation.is_set:
+            relief = state.elevation.max_elevation - state.elevation.min_elevation
+            if relief < 20:
+                warnings.append(
+                    f"Low elevation relief ({relief:.0f}m) — "
+                    "model will print nearly flat. Consider a more mountainous area."
+                )
+
+        if warnings:
+            return "Warnings: " + " | ".join(warnings)
+        return "Area looks good."
