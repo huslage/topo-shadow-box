@@ -13,6 +13,9 @@ def register_preview_tools(mcp: FastMCP):
     async def preview() -> str:
         """Open or refresh the Three.js preview in the browser.
 
+        **Requires:** generate_model first.
+        **Next:** export when satisfied with the preview.
+
         Starts a local HTTP server with WebSocket updates on localhost:3333.
         If the preview is already running, it sends updated mesh data via WebSocket.
         """

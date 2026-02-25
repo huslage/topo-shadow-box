@@ -18,11 +18,13 @@ def register_data_tools(mcp: FastMCP):
     async def fetch_elevation(resolution: int = 200) -> str:
         """Fetch terrain elevation data for the current area of interest.
 
-        Uses AWS Terrain-RGB tiles (Terrarium format) for global elevation data.
-        The elevation grid is interpolated to the requested resolution.
+        Uses AWS Terrain-RGB tiles (free, globally available).
+        **Requires:** set_area_from_coordinates or set_area_from_gpx first.
+        **Next:** Optionally fetch_features, then generate_model.
 
         Args:
-            resolution: Grid size (points per axis). Default 200. Higher = more detail but slower.
+            resolution: Grid points per axis (default 200). Higher = more detail
+                but slower generate_model. Use 100 for quick previews.
         """
         try:
             require_state(state, bounds=True)
@@ -58,11 +60,14 @@ def register_data_tools(mcp: FastMCP):
 
     @mcp.tool()
     async def fetch_features(include: list[str] | None = None) -> str:
-        """Fetch OpenStreetMap features for the current area.
+        """Fetch OpenStreetMap roads, water, and buildings for the current area.
+
+        **Requires:** set_area_from_coordinates or set_area_from_gpx first.
+        **Next:** generate_model (features are optional — skip if not needed).
 
         Args:
-            include: Feature types to fetch. Options: roads, water, buildings.
-                     Default: all three.
+            include: Feature types to fetch. Options: 'roads', 'water', 'buildings'.
+                     Default: all three. Omit types you don't want in the model.
         """
         try:
             require_state(state, bounds=True)

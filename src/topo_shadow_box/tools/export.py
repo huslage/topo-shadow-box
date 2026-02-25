@@ -93,13 +93,13 @@ def register_export_tools(mcp: FastMCP):
 
     @mcp.tool()
     def export_3mf(output_path: str) -> str:
-        """Export the model as a multi-material 3MF file.
+        """Export the model as a multi-material 3MF file for 3D printing.
 
-        Each feature type (terrain, roads, water, buildings, GPX track)
-        is a separate object with its own material color.
+        Each feature type gets its own material color (set via set_colors).
+        **Requires:** generate_model first.
 
         Args:
-            output_path: Where to save the .3mf file (absolute path)
+            output_path: Absolute path for the .3mf file (must be within home directory).
         """
         try:
             require_state(state, mesh=True)
@@ -121,13 +121,14 @@ def register_export_tools(mcp: FastMCP):
 
     @mcp.tool()
     def export_openscad(output_path: str) -> str:
-        """Export the model as a parametric OpenSCAD file.
+        """Export the model as a parametric OpenSCAD .scad file.
 
-        The .scad file includes editable parameters at the top and polyhedron()
-        calls for each mesh. Open in OpenSCAD for parametric customization.
+        Includes editable parameters at the top. Open in OpenSCAD to render
+        or customize dimensions.
+        **Requires:** generate_model first.
 
         Args:
-            output_path: Where to save the .scad file (absolute path)
+            output_path: Absolute path for the .scad file (must be within home directory).
         """
         try:
             require_state(state, mesh=True)
@@ -155,11 +156,13 @@ def register_export_tools(mcp: FastMCP):
     def export_svg(output_path: str) -> str:
         """Export the map insert as an SVG file for paper printing.
 
-        The SVG shows streets, water, parks, and GPX tracks styled for printing
-        as a background insert behind the 3D terrain.
+        Shows streets, water, and GPX tracks styled for printing as a background
+        insert behind the 3D terrain model.
+        **Requires:** set_area_from_coordinates or set_area_from_gpx first
+        (does not require generate_model).
 
         Args:
-            output_path: Where to save the .svg file (absolute path)
+            output_path: Absolute path for the .svg file (must be within home directory).
         """
         try:
             require_state(state, bounds=True)

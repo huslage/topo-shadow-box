@@ -15,8 +15,12 @@ def register_generate_tools(mcp: FastMCP):
     def generate_model() -> str:
         """Generate the full 3D model from current state.
 
-        Requires: area set + elevation fetched. Features and GPX tracks are optional.
-        Generates: terrain mesh, feature meshes, and GPX track mesh.
+        **Requires:** set_area_from_coordinates/gpx + fetch_elevation.
+        Features and GPX tracks are optional but must be fetched before calling this.
+        **Next:** preview (optional), then export_3mf / export_openscad / export_svg.
+
+        Re-run this after changing model params or colors to update the meshes.
+        Reports fine-grained progress as each feature is processed.
         """
         try:
             require_state(state, bounds=True, elevation=True)
@@ -109,8 +113,12 @@ def register_generate_tools(mcp: FastMCP):
     def generate_map_insert(format: str = "both") -> str:
         """Generate a background map insert (SVG for paper printing and/or 3D plate).
 
+        **Requires:** set_area_from_coordinates or set_area_from_gpx first.
+        **Next:** export_svg (for paper) or export_3mf (includes the plate).
+
         Args:
-            format: 'svg' for paper map, 'plate' for 3D-printable flat plate, 'both' for both.
+            format: 'svg' for paper map only, 'plate' for 3D-printable flat plate,
+                    'both' for both (default).
         """
         try:
             require_state(state, bounds=True)

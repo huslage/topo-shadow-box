@@ -14,13 +14,18 @@ def register_model_tools(mcp: FastMCP):
         base_height_mm: float | None = None,
         shape: str | None = None,
     ) -> str:
-        """Configure the shadow box model dimensions.
+        """Set model geometry parameters.
+
+        Can be called any time before generate_model.
+        **Next:** generate_model (re-run after changing params to update meshes).
 
         Args:
-            width_mm: Model width in millimeters (default 200)
-            vertical_scale: Vertical exaggeration factor (default 1.5)
-            base_height_mm: Base platform height in mm (default 10)
-            shape: Model shape: square, circle, rectangle, hexagon (default square)
+            width_mm: Model width in mm (default 200). The larger geographic
+                dimension maps to this value.
+            vertical_scale: Elevation exaggeration multiplier (default 1.5).
+                Use 2-3 for flat terrain, 1 for mountains.
+            base_height_mm: Thickness of the solid base (default 10mm).
+            shape: Model outline shape — 'square', 'circle', 'hexagon', or 'rectangle'.
         """
         p = state.model_params
         if width_mm is not None:
@@ -53,15 +58,13 @@ def register_model_tools(mcp: FastMCP):
         gpx_track: str | None = None,
         map_insert: str | None = None,
     ) -> str:
-        """Set colors for multi-material export. All colors are hex strings (e.g. '#FF0000').
+        """Set material colors for each feature type (hex #RRGGBB).
+
+        Can be called any time before export.
+        **Next:** generate_model or export (colors are applied at export time).
 
         Args:
-            terrain: Terrain color (default #228B22 ForestGreen)
-            water: Water color (default #4682B4 SteelBlue)
-            roads: Road color (default #696969 DimGray)
-            buildings: Building color (default #A9A9A9 DarkGray)
-            gpx_track: GPX track color (default #FF0000 Red)
-            map_insert: Map insert plate color (default #FFFFFF White)
+            terrain/water/roads/buildings/gpx_track/map_insert: Hex color strings.
         """
         c = state.colors
         for name, value in [

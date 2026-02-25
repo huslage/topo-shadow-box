@@ -26,6 +26,15 @@ def register_area_tools(mcp: FastMCP):
 
         Either provide (lat, lon, radius_m) for a circular area,
         or (north, south, east, west) for a rectangular bounding box.
+
+        **Next:** Optionally call validate_area to check for problems,
+        then fetch_elevation, then fetch_features (optional), then generate_model.
+
+        Args:
+            lat: Center latitude (degrees). Use with lon and radius_m.
+            lon: Center longitude (degrees). Use with lat and radius_m.
+            radius_m: Radius in meters around the center point.
+            north/south/east/west: Explicit bounding box (degrees).
         """
         if lat is not None and lon is not None and radius_m is not None:
             bounds = add_padding_to_bounds(
@@ -56,11 +65,12 @@ def register_area_tools(mcp: FastMCP):
     def set_area_from_gpx(file_path: str, padding_m: float = 500.0) -> str:
         """Load a GPX file and use its bounds (plus padding) as the area of interest.
 
-        Also stores the GPX tracks for later rendering.
+        Also stores the GPX tracks for rendering as a raised strip on the terrain.
+        **Next:** fetch_elevation, then fetch_features (optional), then generate_model.
 
         Args:
-            file_path: Absolute path to a .gpx file
-            padding_m: Padding in meters around the GPX bounds (default 500m)
+            file_path: Absolute path to a .gpx file.
+            padding_m: Padding in meters around the GPX bounds (default 500m).
         """
         gpx_data = parse_gpx_file(file_path)
 
