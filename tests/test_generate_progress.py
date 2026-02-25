@@ -74,7 +74,7 @@ async def test_generate_model_reports_progress():
     mock_ctx = AsyncMock()
     mock_ctx.report_progress = AsyncMock()
 
-    result = await generate_model(ctx=mock_ctx)
+    await generate_model(ctx=mock_ctx)
 
     assert mock_ctx.report_progress.called, "report_progress should have been called"
     calls = mock_ctx.report_progress.call_args_list

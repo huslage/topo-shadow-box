@@ -1,7 +1,6 @@
 """Tests for mesh generation utilities."""
 
 import numpy as np
-import pytest
 
 from topo_shadow_box.core.mesh import (
     _elevation_normalization,

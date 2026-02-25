@@ -5,8 +5,7 @@ from mcp.server.fastmcp import FastMCP
 from ..state import state, MeshData
 from mcp.server.fastmcp import Context
 from ..core.mesh import (
-    generate_terrain_mesh, generate_feature_meshes,
-    generate_gpx_track_mesh, generate_single_feature_mesh,
+    generate_terrain_mesh, generate_gpx_track_mesh, generate_single_feature_mesh,
     _elevation_normalization,
 )
 from ..core.map_insert import generate_map_insert_svg, generate_map_insert_plate

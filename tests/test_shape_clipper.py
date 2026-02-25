@@ -1,7 +1,6 @@
 """Tests for shape clipping utilities."""
 
 import numpy as np
-import pytest
 
 from topo_shadow_box.core.shape_clipper import (
     CircleClipper,

@@ -49,29 +49,29 @@ def export_openscad(
         if not verts or not faces:
             continue
 
-        safe_name = name.replace(" ", "_").replace("-", "_")
+        name.replace(" ", "_").replace("-", "_")
         lines.append("")
         lines.append(f"// {name} ({mtype})")
         lines.append(f"color({color})")
 
         # Format vertices
-        lines.append(f"polyhedron(")
-        lines.append(f"  points = [")
+        lines.append("polyhedron(")
+        lines.append("  points = [")
 
         # Write vertices in chunks for readability
         for i, v in enumerate(verts):
             comma = "," if i < len(verts) - 1 else ""
             lines.append(f"    [{v[0]:.4f}, {v[1]:.4f}, {v[2]:.4f}]{comma}")
 
-        lines.append(f"  ],")
-        lines.append(f"  faces = [")
+        lines.append("  ],")
+        lines.append("  faces = [")
 
         for i, f in enumerate(faces):
             comma = "," if i < len(faces) - 1 else ""
             lines.append(f"    [{f[0]}, {f[1]}, {f[2]}]{comma}")
 
-        lines.append(f"  ]")
-        lines.append(f");")
+        lines.append("  ]")
+        lines.append(");")
 
     lines.append("")
 

@@ -1,6 +1,5 @@
 import logging
 import pytest
-import anyio
 from unittest.mock import patch, AsyncMock
 
 
@@ -50,7 +49,6 @@ async def test_all_tiles_fail_does_not_crash():
         try:
             result = await fetch_terrain_elevation(37.8, 37.75, -122.4, -122.45, resolution=10)
             # If it returns, the grid should exist (may be all zeros)
-            import numpy as np
             assert result.grid is not None
         except ValueError:
             pass  # "Bounding box doesn't overlap" or "Cropped region too small" — acceptable

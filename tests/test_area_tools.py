@@ -1,5 +1,4 @@
 """Tests for validate_area tool."""
-import pytest
 from unittest.mock import MagicMock
 from topo_shadow_box.state import state, Bounds, ElevationData
 import numpy as np

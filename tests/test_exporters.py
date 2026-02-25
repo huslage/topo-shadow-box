@@ -260,7 +260,7 @@ def test_unknown_feature_type_logs_warning(caplog):
 
     from topo_shadow_box.tools.export import _collect_meshes
     with caplog.at_level(logging.WARNING, logger="topo_shadow_box.tools.export"):
-        meshes = _collect_meshes()
+        _collect_meshes()
 
     # Restore state
     state.feature_meshes = original_feature_meshes

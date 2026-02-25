@@ -1,12 +1,10 @@
 """Tests for state://session MCP resource."""
 import json
-import pytest
 
 
 def test_state_resource_returns_valid_json():
     """state://session resource should return JSON matching state.summary()."""
     from topo_shadow_box.server import mcp
-    from topo_shadow_box.state import state
 
     resources = {str(r.uri): r for r in mcp._resource_manager._resources.values()}
     assert "state://session" in resources, (

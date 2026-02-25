@@ -1,6 +1,5 @@
 """Pydantic return models for core computation functions."""
 
-from typing import Optional
 import numpy as np
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from topo_shadow_box.models import RoadFeature, WaterFeature, BuildingFeature
