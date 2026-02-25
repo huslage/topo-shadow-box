@@ -648,6 +648,61 @@ def generate_feature_meshes(
     return meshes
 
 
+def generate_single_feature_mesh(
+    feature,
+    feature_type: str,
+    elevation: ElevationData,
+    bounds: Bounds,
+    transform: GeoToModelTransform,
+    vertical_scale: float = 1.5,
+    shape: str = "square",
+    _norm: tuple[float, float] | None = None,
+) -> "MeshResult | None":
+    """Generate a mesh for a single OSM feature.
+
+    Used by generate_model for per-feature progress reporting.
+    feature_type: 'road', 'water', or 'building'
+    """
+    min_elev, elev_range = _norm if _norm is not None else _elevation_normalization(elevation.grid)
+    model_width = max(transform.model_width_x, transform.model_width_z)
+    size_scale = model_width / 200.0
+    clipper = _create_shape_clipper(shape, transform)
+
+    if feature_type == "road":
+        result = _generate_road_mesh(
+            feature, elevation, transform, min_elev, elev_range,
+            vertical_scale, size_scale, shape_clipper=clipper,
+        )
+        if result:
+            return MeshResult(
+                vertices=result["vertices"], faces=result["faces"],
+                name=result.get("name", "Road"), feature_type="road",
+            )
+    elif feature_type == "water":
+        result = _generate_water_mesh(
+            feature, elevation, transform, min_elev, elev_range,
+            vertical_scale, size_scale, shape_clipper=clipper,
+        )
+        if result:
+            return MeshResult(
+                vertices=result["vertices"], faces=result["faces"],
+                name=result.get("name", "Water"), feature_type="water",
+            )
+    elif feature_type == "building":
+        building_gen = BuildingShapeGenerator()
+        result = _generate_building_mesh(
+            feature, elevation, transform, min_elev, elev_range,
+            vertical_scale, size_scale, shape_clipper=clipper,
+            building_shape_gen=building_gen,
+        )
+        if result:
+            return MeshResult(
+                vertices=result["vertices"], faces=result["faces"],
+                name=result.get("name", "Building"), feature_type="building",
+            )
+    return None
+
+
 def _get_attr_or_key(obj, attr, default=None):
     """Get attribute from typed model or key from dict."""
     if hasattr(obj, attr):
