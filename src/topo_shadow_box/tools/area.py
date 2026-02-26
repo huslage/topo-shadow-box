@@ -172,16 +172,17 @@ def register_area_tools(mcp: FastMCP):
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
     def geocode_place(query: str, limit: int = 5) -> str:
-        """Search for a place by name and return candidate locations with coordinates.
+        """Search for a place by name and set the area of interest.
 
         Use this when the user provides a place name but no coordinates or GPX file.
         If the user provides a GPX file, use set_area_from_gpx instead — no geocoding needed.
 
-        Returns a numbered list of candidates stored in session state.
-        Present them to the user and wait for them to choose a number.
+        - 1 result: area is set automatically, no further action needed.
+        - 2+ results: raises an error with a numbered list. Present it to the user,
+          wait for them to reply with a number, then call select_geocode_result.
 
-        **Next:** select_geocode_result with the number the user chooses. Do NOT call
-        set_area_from_coordinates directly — the user must pick a candidate first.
+        **Next (1 result):** fetch_elevation directly.
+        **Next (2+ results):** select_geocode_result with the user's chosen number.
 
         Args:
             query: Place name to search for (e.g., "Mount Hood", "Grand Canyon", "Portland, Oregon").
@@ -254,14 +255,15 @@ def register_area_tools(mcp: FastMCP):
     def select_geocode_result(number: int) -> str:
         """Select a geocode candidate by number and set it as the area of interest.
 
-        Call this after geocode_place, using the number the user chose.
-        Sets the area bounds from the candidate's bounding box.
+        Only call this after geocode_place returned multiple candidates AND the user
+        has replied with their chosen number. Single results are auto-selected by
+        geocode_place — do not call this in that case.
 
-        **Requires:** geocode_place called first (candidates stored in session).
+        **Requires:** geocode_place called first with multiple results (candidates stored in session).
         **Next:** fetch_elevation, then fetch_features (optional), then generate_model.
 
         Args:
-            number: 1-based index of the candidate to select.
+            number: 1-based index of the candidate the user selected.
         """
         if not state.pending_geocode_candidates:
             return "Error: No geocode search results pending. Call geocode_place first."
