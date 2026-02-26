@@ -314,3 +314,45 @@ def test_select_geocode_result_no_pending_candidates_returns_error():
 
     assert "error" in result.lower()
     assert "geocode" in result.lower() or "search" in result.lower()
+
+
+FAKE_SINGLE_RESULT = [
+    {
+        "display_name": "Mount Hood, Hood River County, Oregon, United States",
+        "lat": "45.3736",
+        "lon": "-121.6959",
+        "type": "peak",
+        "boundingbox": ["45.3536", "45.3936", "-121.7159", "-121.6759"],
+    }
+]
+
+
+def test_geocode_place_single_result_auto_selects_area(monkeypatch):
+    import httpx
+    from topo_shadow_box.state import Bounds
+
+    geocode_place = _register_and_get("geocode_place")
+    state.bounds = Bounds()  # reset
+    state.pending_geocode_candidates = []
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **kw: _make_fake_geocode_response(FAKE_SINGLE_RESULT))
+
+    result = geocode_place(query="Mount Hood")
+
+    assert state.bounds.is_set
+    assert abs(state.bounds.north - 45.3936) < 0.001
+    assert abs(state.bounds.south - 45.3536) < 0.001
+    assert "auto" in result.lower() or "1 result" in result.lower() or "mount hood" in result.lower()
+
+
+def test_geocode_place_single_result_clears_pending_candidates(monkeypatch):
+    import httpx
+
+    geocode_place = _register_and_get("geocode_place")
+    state.pending_geocode_candidates = []
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **kw: _make_fake_geocode_response(FAKE_SINGLE_RESULT))
+
+    geocode_place(query="Mount Hood")
+
+    assert state.pending_geocode_candidates == []

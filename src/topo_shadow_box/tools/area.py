@@ -204,6 +204,30 @@ def register_area_tools(mcp: FastMCP):
                 )
             )
 
+        # Single result: auto-select without requiring user input
+        if len(candidates) == 1:
+            c = candidates[0]
+            bounds = Bounds(
+                north=c.bbox_north,
+                south=c.bbox_south,
+                east=c.bbox_east,
+                west=c.bbox_west,
+                is_set=True,
+            )
+            state.bounds = bounds
+            state.pending_geocode_candidates = []
+            state.elevation = ElevationData()
+            state.features = OsmFeatureSet()
+            state.terrain_mesh = None
+            state.feature_meshes = []
+            state.gpx_mesh = None
+            return (
+                f"Found 1 result: '{c.display_name}' (auto-selected). "
+                f"Area set: N={bounds.north:.6f}, S={bounds.south:.6f}, "
+                f"E={bounds.east:.6f}, W={bounds.west:.6f} "
+                f"(~{bounds.lat_range * 111_000:.0f}m x {bounds.lon_range * 111_000:.0f}m)"
+            )
+
         state.pending_geocode_candidates = candidates
 
         lines = [f"Found {len(candidates)} location(s) for '{query}':\n"]
