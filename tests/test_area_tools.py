@@ -113,6 +113,7 @@ def test_geocode_candidate_model():
 
 def test_geocode_place_returns_candidates(monkeypatch):
     import httpx
+    import pytest
     from unittest.mock import MagicMock
 
     geocode_place = _register_and_get("geocode_place")
@@ -138,11 +139,13 @@ def test_geocode_place_returns_candidates(monkeypatch):
 
     monkeypatch.setattr(httpx, "get", lambda *a, **kw: fake_response)
 
-    result = geocode_place(query="Mount Hood")
-    assert "1." in result
-    assert "2." in result
-    assert "45.3736" in result
-    assert "peak" in result
+    with pytest.raises(ValueError) as exc_info:
+        geocode_place(query="Mount Hood")
+    msg = str(exc_info.value)
+    assert "1." in msg
+    assert "2." in msg
+    assert "45.3736" in msg
+    assert "peak" in msg
 
 
 def test_geocode_place_no_results(monkeypatch):
@@ -228,27 +231,39 @@ def _make_fake_geocode_response(results=None):
 
 def test_geocode_place_stores_candidates_in_state(monkeypatch):
     import httpx
+    import pytest
 
     geocode_place = _register_and_get("geocode_place")
     state.pending_geocode_candidates = []
 
     monkeypatch.setattr(httpx, "get", lambda *a, **kw: _make_fake_geocode_response())
 
-    geocode_place(query="Mount Hood")
+    with pytest.raises(ValueError):
+        geocode_place(query="Mount Hood")
 
     assert len(state.pending_geocode_candidates) == 2
     assert state.pending_geocode_candidates[0].lat == 45.3736
     assert state.pending_geocode_candidates[1].place_type == "resort"
 
 
-def test_select_geocode_result_sets_area_from_bbox(monkeypatch):
-    import httpx
+def test_select_geocode_result_sets_area_from_bbox():
+    from topo_shadow_box.models import GeocodeCandidate
 
-    geocode_place = _register_and_get("geocode_place")
     select_geocode_result = _register_and_get("select_geocode_result")
 
-    monkeypatch.setattr(httpx, "get", lambda *a, **kw: _make_fake_geocode_response())
-    geocode_place(query="Mount Hood")
+    state.pending_geocode_candidates = [
+        GeocodeCandidate(
+            display_name=r["display_name"],
+            lat=float(r["lat"]),
+            lon=float(r["lon"]),
+            place_type=r["type"],
+            bbox_south=float(r["boundingbox"][0]),
+            bbox_north=float(r["boundingbox"][1]),
+            bbox_west=float(r["boundingbox"][2]),
+            bbox_east=float(r["boundingbox"][3]),
+        )
+        for r in FAKE_GEOCODE_RESULTS
+    ]
 
     result = select_geocode_result(number=1)
 
@@ -260,31 +275,50 @@ def test_select_geocode_result_sets_area_from_bbox(monkeypatch):
     assert abs(state.bounds.west - (-121.7159)) < 0.001
 
 
-def test_select_geocode_result_clears_pending_candidates(monkeypatch):
-    import httpx
+def test_select_geocode_result_clears_pending_candidates():
+    from topo_shadow_box.models import GeocodeCandidate
 
-    geocode_place = _register_and_get("geocode_place")
     select_geocode_result = _register_and_get("select_geocode_result")
 
-    monkeypatch.setattr(httpx, "get", lambda *a, **kw: _make_fake_geocode_response())
-    geocode_place(query="Mount Hood")
+    state.pending_geocode_candidates = [
+        GeocodeCandidate(
+            display_name=r["display_name"],
+            lat=float(r["lat"]),
+            lon=float(r["lon"]),
+            place_type=r["type"],
+            bbox_south=float(r["boundingbox"][0]),
+            bbox_north=float(r["boundingbox"][1]),
+            bbox_west=float(r["boundingbox"][2]),
+            bbox_east=float(r["boundingbox"][3]),
+        )
+        for r in FAKE_GEOCODE_RESULTS
+    ]
 
     select_geocode_result(number=2)
 
     assert state.pending_geocode_candidates == []
 
 
-def test_select_geocode_result_number_too_high_returns_error(monkeypatch):
-    import httpx
+def test_select_geocode_result_number_too_high_returns_error():
+    from topo_shadow_box.models import GeocodeCandidate
     from topo_shadow_box.state import Bounds
 
-    geocode_place = _register_and_get("geocode_place")
     select_geocode_result = _register_and_get("select_geocode_result")
 
     state.bounds = Bounds()  # reset
-
-    monkeypatch.setattr(httpx, "get", lambda *a, **kw: _make_fake_geocode_response())
-    geocode_place(query="Mount Hood")
+    state.pending_geocode_candidates = [
+        GeocodeCandidate(
+            display_name=r["display_name"],
+            lat=float(r["lat"]),
+            lon=float(r["lon"]),
+            place_type=r["type"],
+            bbox_south=float(r["boundingbox"][0]),
+            bbox_north=float(r["boundingbox"][1]),
+            bbox_west=float(r["boundingbox"][2]),
+            bbox_east=float(r["boundingbox"][3]),
+        )
+        for r in FAKE_GEOCODE_RESULTS
+    ]
 
     result = select_geocode_result(number=99)
 
@@ -292,14 +326,24 @@ def test_select_geocode_result_number_too_high_returns_error(monkeypatch):
     assert state.bounds.is_set is False
 
 
-def test_select_geocode_result_number_zero_returns_error(monkeypatch):
-    import httpx
+def test_select_geocode_result_number_zero_returns_error():
+    from topo_shadow_box.models import GeocodeCandidate
 
-    geocode_place = _register_and_get("geocode_place")
     select_geocode_result = _register_and_get("select_geocode_result")
 
-    monkeypatch.setattr(httpx, "get", lambda *a, **kw: _make_fake_geocode_response())
-    geocode_place(query="Mount Hood")
+    state.pending_geocode_candidates = [
+        GeocodeCandidate(
+            display_name=r["display_name"],
+            lat=float(r["lat"]),
+            lon=float(r["lon"]),
+            place_type=r["type"],
+            bbox_south=float(r["boundingbox"][0]),
+            bbox_north=float(r["boundingbox"][1]),
+            bbox_west=float(r["boundingbox"][2]),
+            bbox_east=float(r["boundingbox"][3]),
+        )
+        for r in FAKE_GEOCODE_RESULTS
+    ]
 
     result = select_geocode_result(number=0)
 
