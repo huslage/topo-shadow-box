@@ -243,7 +243,6 @@ def test_geocode_place_stores_candidates_in_state(monkeypatch):
 
 def test_select_geocode_result_sets_area_from_bbox(monkeypatch):
     import httpx
-    from topo_shadow_box.models import GeocodeCandidate
 
     geocode_place = _register_and_get("geocode_place")
     select_geocode_result = _register_and_get("select_geocode_result")
