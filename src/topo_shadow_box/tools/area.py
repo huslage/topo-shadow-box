@@ -170,7 +170,7 @@ def register_area_tools(mcp: FastMCP):
             return "Warnings: " + " | ".join(warnings)
         return "Area looks good."
 
-    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
     def geocode_place(query: str, limit: int = 5) -> str:
         """Search for a place by name and set the area of interest.
 
