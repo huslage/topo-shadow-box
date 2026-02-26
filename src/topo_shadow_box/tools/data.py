@@ -3,6 +3,7 @@
 import logging
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from ..state import state, ElevationData
 from ..core.elevation import fetch_terrain_elevation
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 def register_data_tools(mcp: FastMCP):
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True))
     async def fetch_elevation(resolution: int = 200) -> str:
         """Fetch terrain elevation data for the current area of interest.
 
@@ -58,7 +59,7 @@ def register_data_tools(mcp: FastMCP):
             f"({result.max_elevation - result.min_elevation:.0f}m relief)"
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True))
     async def fetch_features(include: list[str] | None = None) -> str:
         """Fetch OpenStreetMap roads, water, and buildings for the current area.
 

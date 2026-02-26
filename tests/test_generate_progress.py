@@ -55,7 +55,7 @@ def _get_generate_model_fn():
     from topo_shadow_box.tools.generate import register_generate_tools
     tools = {}
     mock_mcp = MagicMock()
-    def capture():
+    def capture(**kwargs):
         def decorator(fn):
             tools[fn.__name__] = fn
             return fn

@@ -11,7 +11,7 @@ def _get_session_tools():
     from topo_shadow_box.tools.session import register_session_tools
     tools = {}
     mock_mcp = MagicMock()
-    def capture():
+    def capture(**kwargs):
         def decorator(fn):
             tools[fn.__name__] = fn
             return fn

@@ -2,6 +2,7 @@
 
 import webbrowser
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from ..state import state
 from ..preview.server import start_preview_server, update_preview
@@ -9,7 +10,7 @@ from ..preview.server import start_preview_server, update_preview
 
 def register_preview_tools(mcp: FastMCP):
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
     async def preview() -> str:
         """Open or refresh the Three.js preview in the browser.
 

@@ -1,6 +1,7 @@
 """Generation tools: generate_model, generate_map_insert."""
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from ..state import state, MeshData
 from mcp.server.fastmcp import Context
@@ -15,7 +16,7 @@ from ._prereqs import require_state
 
 def register_generate_tools(mcp: FastMCP):
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
     async def generate_model(ctx: Context) -> str:
         """Generate the full 3D model from current state.
 
@@ -130,7 +131,7 @@ def register_generate_tools(mcp: FastMCP):
             f"Total vertices: {total_verts}"
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
     def generate_map_insert(format: str = "both") -> str:
         """Generate a background map insert (SVG for paper printing and/or 3D plate).
 

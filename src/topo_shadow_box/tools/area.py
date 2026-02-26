@@ -3,6 +3,7 @@
 import math
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from ..state import state, Bounds, ElevationData
 from ..core.gpx import parse_gpx_file
@@ -12,7 +13,7 @@ from ..core.models import OsmFeatureSet
 
 def register_area_tools(mcp: FastMCP):
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
     def set_area_from_coordinates(
         lat: float | None = None,
         lon: float | None = None,
@@ -61,7 +62,7 @@ def register_area_tools(mcp: FastMCP):
             f"(~{bounds.lat_range * 111_000:.0f}m x {bounds.lon_range * 111_000:.0f}m)"
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
     def set_area_from_gpx(file_path: str, padding_m: float = 500.0) -> str:
         """Load a GPX file and use its bounds (plus padding) as the area of interest.
 
@@ -101,7 +102,7 @@ def register_area_tools(mcp: FastMCP):
             f"(padding: {padding_m}m)"
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
     def validate_area() -> str:
         """Check the current area for potential problems before fetching data.
 

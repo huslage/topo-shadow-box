@@ -2,13 +2,14 @@
 
 import json
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from ..state import state
 
 
 def register_status_tools(mcp: FastMCP):
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
     def get_status() -> str:
         """Return a summary of the current model state.
 

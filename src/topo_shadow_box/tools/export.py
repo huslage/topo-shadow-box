@@ -4,6 +4,7 @@ import logging
 import os
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from ..state import state
 from ..exporters.threemf import export_3mf as do_export_3mf
@@ -91,7 +92,7 @@ def _collect_meshes() -> list[dict]:
 
 def register_export_tools(mcp: FastMCP):
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
     def export_3mf(output_path: str) -> str:
         """Export the model as a multi-material 3MF file for 3D printing.
 
@@ -119,7 +120,7 @@ def register_export_tools(mcp: FastMCP):
         result = do_export_3mf(meshes, output_path, base_height_mm=state.model_params.base_height_mm)
         return f"3MF exported to {output_path} ({result['objects']} objects)"
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
     def export_openscad(output_path: str) -> str:
         """Export the model as a parametric OpenSCAD .scad file.
 
@@ -152,7 +153,7 @@ def register_export_tools(mcp: FastMCP):
         )
         return f"OpenSCAD exported to {output_path}"
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
     def export_svg(output_path: str) -> str:
         """Export the map insert as an SVG file for paper printing.
 

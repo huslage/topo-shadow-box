@@ -9,7 +9,7 @@ def _register_and_get(tool_name: str):
     from topo_shadow_box.tools.area import register_area_tools
     tools = {}
     mock_mcp = MagicMock()
-    def capture():
+    def capture(**kwargs):
         def decorator(fn):
             tools[fn.__name__] = fn
             return fn

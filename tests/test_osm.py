@@ -119,7 +119,7 @@ async def test_fetch_features_returns_explicit_message_when_empty():
     # Capture the registered tool function by intercepting mcp.tool() decoration
     registered_tools = {}
     mock_mcp = MagicMock()
-    def capture_tool():
+    def capture_tool(**kwargs):
         def decorator(fn):
             registered_tools[fn.__name__] = fn
             return fn

@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from ..state import state, Bounds, ElevationData, ModelParams, Colors
 from ..core.models import OsmFeatureSet
@@ -18,7 +19,7 @@ def _default_path() -> Path:
 
 def register_session_tools(mcp: FastMCP):
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
     def save_session(path: str | None = None) -> str:
         """Save the current session to a JSON file for later resumption.
 
@@ -71,7 +72,7 @@ def register_session_tools(mcp: FastMCP):
         logger.info("Session saved to %s", save_path)
         return f"Session saved to {save_path}"
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
     def load_session(path: str | None = None) -> str:
         """Load a previously saved session from a JSON file.
 

@@ -1,13 +1,14 @@
 """Model configuration tools: set_model_params, set_colors."""
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from ..state import state
 
 
 def register_model_tools(mcp: FastMCP):
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
     def set_model_params(
         width_mm: float | None = None,
         vertical_scale: float | None = None,
@@ -49,7 +50,7 @@ def register_model_tools(mcp: FastMCP):
             f"base={p.base_height_mm}mm, shape={p.shape}"
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
     def set_colors(
         terrain: str | None = None,
         water: str | None = None,
