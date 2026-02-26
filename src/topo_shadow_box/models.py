@@ -53,3 +53,14 @@ class BuildingFeature(BaseModel):
     tags: dict = Field(default_factory=dict)
     name: str = ""
     height: float = Field(default=10.0, gt=0)
+
+
+class GeocodeCandidate(BaseModel):
+    display_name: str
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    place_type: str
+    bbox_north: float
+    bbox_south: float
+    bbox_east: float
+    bbox_west: float

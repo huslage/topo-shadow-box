@@ -93,3 +93,19 @@ def test_validate_area_requires_bounds_set():
     state.bounds = Bounds()  # not set
     result = validate_area()
     assert "error" in result.lower() or "area" in result.lower()
+
+
+def test_geocode_candidate_model():
+    from topo_shadow_box.models import GeocodeCandidate
+    c = GeocodeCandidate(
+        display_name="Mount Hood, Hood River County, Oregon, United States",
+        lat=45.3736,
+        lon=-121.6959,
+        place_type="peak",
+        bbox_north=45.3936,
+        bbox_south=45.3536,
+        bbox_east=-121.6759,
+        bbox_west=-121.7159,
+    )
+    assert c.lat == 45.3736
+    assert c.bbox_north == 45.3936
