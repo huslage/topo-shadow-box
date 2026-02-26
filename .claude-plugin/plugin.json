@@ -1,7 +1,7 @@
 {
   "name": "topo-shadow-box",
   "description": "Generate 3D-printable topographic shadow boxes",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "mcpServers": {
     "topo-shadow-box": {
       "command": "uv",
