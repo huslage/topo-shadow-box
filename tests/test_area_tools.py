@@ -368,7 +368,7 @@ def test_geocode_place_multiple_results_raises_exception(monkeypatch):
 
     monkeypatch.setattr(httpx, "get", lambda *a, **kw: _make_fake_geocode_response())
 
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(ValueError) as exc_info:
         geocode_place(query="Mount Hood")
 
     msg = str(exc_info.value)
@@ -386,7 +386,7 @@ def test_geocode_place_multiple_results_still_stores_candidates(monkeypatch):
 
     monkeypatch.setattr(httpx, "get", lambda *a, **kw: _make_fake_geocode_response())
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         geocode_place(query="Mount Hood")
 
     assert len(state.pending_geocode_candidates) == 2
