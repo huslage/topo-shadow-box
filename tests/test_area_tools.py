@@ -342,7 +342,8 @@ def test_geocode_place_single_result_auto_selects_area(monkeypatch):
     assert state.bounds.is_set
     assert abs(state.bounds.north - 45.3936) < 0.001
     assert abs(state.bounds.south - 45.3536) < 0.001
-    assert "auto" in result.lower() or "1 result" in result.lower() or "mount hood" in result.lower()
+    assert "auto-selected" in result.lower()
+    assert "found 1 result" in result.lower()
 
 
 def test_geocode_place_single_result_clears_pending_candidates(monkeypatch):

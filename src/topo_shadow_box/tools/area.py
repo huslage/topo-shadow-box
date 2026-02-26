@@ -13,6 +13,25 @@ from ..core.models import OsmFeatureSet
 from ..models import GeocodeCandidate
 
 
+def _set_area_from_candidate(candidate: GeocodeCandidate) -> Bounds:
+    """Set session area bounds from a geocode candidate and clear downstream state."""
+    bounds = Bounds(
+        north=candidate.bbox_north,
+        south=candidate.bbox_south,
+        east=candidate.bbox_east,
+        west=candidate.bbox_west,
+        is_set=True,
+    )
+    state.bounds = bounds
+    state.pending_geocode_candidates = []
+    state.elevation = ElevationData()
+    state.features = OsmFeatureSet()
+    state.terrain_mesh = None
+    state.feature_meshes = []
+    state.gpx_mesh = None
+    return bounds
+
+
 def register_area_tools(mcp: FastMCP):
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
@@ -207,20 +226,7 @@ def register_area_tools(mcp: FastMCP):
         # Single result: auto-select without requiring user input
         if len(candidates) == 1:
             c = candidates[0]
-            bounds = Bounds(
-                north=c.bbox_north,
-                south=c.bbox_south,
-                east=c.bbox_east,
-                west=c.bbox_west,
-                is_set=True,
-            )
-            state.bounds = bounds
-            state.pending_geocode_candidates = []
-            state.elevation = ElevationData()
-            state.features = OsmFeatureSet()
-            state.terrain_mesh = None
-            state.feature_meshes = []
-            state.gpx_mesh = None
+            bounds = _set_area_from_candidate(c)
             return (
                 f"Found 1 result: '{c.display_name}' (auto-selected). "
                 f"Area set: N={bounds.north:.6f}, S={bounds.south:.6f}, "
@@ -265,21 +271,7 @@ def register_area_tools(mcp: FastMCP):
             return f"Error: Invalid selection {number}. Choose a number between 1 and {n}."
 
         candidate = state.pending_geocode_candidates[number - 1]
-        state.pending_geocode_candidates = []
-
-        bounds = Bounds(
-            north=candidate.bbox_north,
-            south=candidate.bbox_south,
-            east=candidate.bbox_east,
-            west=candidate.bbox_west,
-            is_set=True,
-        )
-        state.bounds = bounds
-        state.elevation = ElevationData()
-        state.features = OsmFeatureSet()
-        state.terrain_mesh = None
-        state.feature_meshes = []
-        state.gpx_mesh = None
+        bounds = _set_area_from_candidate(candidate)
 
         return (
             f"Area set from '{candidate.display_name}': "
