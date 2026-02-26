@@ -30,6 +30,8 @@ def register_area_tools(mcp: FastMCP):
         Either provide (lat, lon, radius_m) for a circular area,
         or (north, south, east, west) for a rectangular bounding box.
 
+        **Prior:** If you only have a place name, call geocode_place first to get coordinates.
+
         **Next:** Optionally call validate_area to check for problems,
         then fetch_elevation, then fetch_features (optional), then generate_model.
 
