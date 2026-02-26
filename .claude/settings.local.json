@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__set_area_from_gpx",
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__set_area_from_coordinates",
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__fetch_elevation",
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__fetch_features",
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__generate_model",
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__generate_map_insert",
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__export_3mf",
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__export_openscad",
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__export_svg",
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__get_status",
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__load_session",
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__save_session",
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__preview",
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__set_colors",
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__set_model_params",
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__geocode_place",
+      "mcp__plugin_topo-shadow-box_topo-shadow-box__validate_area",
+      "Bash(.venv/bin/python:*)",
+      "Bash(.venv/bin/pytest:*)",
+      "Bash(git:*)",
+      "Bash(tail:*)",
+      "Bash(cat:*)",
+      "Bash(uv sync:*)",
+      "Bash(/Users/huslage/work/topo-shadow-box/.venv/bin/python:*)",
+      "Bash(head:*)",
+      "Bash(.venv/bin/ruff check:*)",
+      "Bash(python3:*)",
+      "WebSearch",
+      "Bash(uv run:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh:*)"
+    ]
+  }
+}

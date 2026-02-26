@@ -2,6 +2,7 @@
 
 import math
 
+import httpx
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
@@ -9,6 +10,7 @@ from ..state import state, Bounds, ElevationData
 from ..core.gpx import parse_gpx_file
 from ..core.coords import add_padding_to_bounds
 from ..core.models import OsmFeatureSet
+from ..models import GeocodeCandidate
 
 
 def register_area_tools(mcp: FastMCP):
@@ -27,6 +29,8 @@ def register_area_tools(mcp: FastMCP):
 
         Either provide (lat, lon, radius_m) for a circular area,
         or (north, south, east, west) for a rectangular bounding box.
+
+        **Prior:** If you only have a place name, call geocode_place first to get coordinates.
 
         **Next:** Optionally call validate_area to check for problems,
         then fetch_elevation, then fetch_features (optional), then generate_model.
@@ -146,3 +150,69 @@ def register_area_tools(mcp: FastMCP):
         if warnings:
             return "Warnings: " + " | ".join(warnings)
         return "Area looks good."
+
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+    def geocode_place(query: str, limit: int = 5) -> str:
+        """Search for a place by name and return candidate locations with coordinates.
+
+        Use this when the user provides a place name but no coordinates or GPX file.
+        If the user provides a GPX file, use set_area_from_gpx instead — no geocoding needed.
+
+        Returns a numbered list of candidates. Present them to the user, let them pick one,
+        then call set_area_from_coordinates with the chosen lat/lon or bounding box.
+
+        **Next:** set_area_from_coordinates with the chosen candidate's coordinates.
+
+        Args:
+            query: Place name to search for (e.g., "Mount Hood", "Grand Canyon", "Portland, Oregon").
+            limit: Maximum number of candidates to return (1–10, default 5).
+        """
+        limit = max(1, min(10, limit))
+
+        try:
+            response = httpx.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": query, "format": "json", "limit": limit},
+                headers={"User-Agent": "topo-shadow-box/1.0"},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            results = response.json()
+        except httpx.HTTPStatusError as exc:
+            return f"Error: Nominatim returned HTTP {exc.response.status_code}."
+        except Exception as exc:
+            return f"Error contacting geocoding service: {exc}"
+
+        if not results:
+            return f"No locations found for '{query}'. Try a more specific name or add a region (e.g., 'Portland, Oregon')."
+
+        candidates = []
+        for item in results:
+            bbox = item.get("boundingbox", [])
+            # Nominatim boundingbox order: [south, north, west, east]
+            candidates.append(
+                GeocodeCandidate(
+                    display_name=item["display_name"],
+                    lat=float(item["lat"]),
+                    lon=float(item["lon"]),
+                    place_type=item.get("type", "unknown"),
+                    bbox_south=float(bbox[0]) if len(bbox) >= 4 else float(item["lat"]),
+                    bbox_north=float(bbox[1]) if len(bbox) >= 4 else float(item["lat"]),
+                    bbox_west=float(bbox[2]) if len(bbox) >= 4 else float(item["lon"]),
+                    bbox_east=float(bbox[3]) if len(bbox) >= 4 else float(item["lon"]),
+                )
+            )
+
+        lines = [f"Found {len(candidates)} location(s) for '{query}':\n"]
+        for i, c in enumerate(candidates, 1):
+            lines.append(
+                f"{i}. {c.display_name}\n"
+                f"   Type: {c.place_type} | Center: {c.lat:.5f}, {c.lon:.5f}\n"
+                f"   Bbox: N={c.bbox_north:.5f}, S={c.bbox_south:.5f}, "
+                f"E={c.bbox_east:.5f}, W={c.bbox_west:.5f}"
+            )
+        lines.append(
+            "\nAsk the user which location to use, then call set_area_from_coordinates "
+            "with the chosen lat/lon (and a radius_m) or the bounding box coordinates."
+        )
+        return "\n".join(lines)

@@ -93,3 +93,108 @@ def test_validate_area_requires_bounds_set():
     state.bounds = Bounds()  # not set
     result = validate_area()
     assert "error" in result.lower() or "area" in result.lower()
+
+
+def test_geocode_candidate_model():
+    from topo_shadow_box.models import GeocodeCandidate
+    c = GeocodeCandidate(
+        display_name="Mount Hood, Hood River County, Oregon, United States",
+        lat=45.3736,
+        lon=-121.6959,
+        place_type="peak",
+        bbox_north=45.3936,
+        bbox_south=45.3536,
+        bbox_east=-121.6759,
+        bbox_west=-121.7159,
+    )
+    assert c.lat == 45.3736
+    assert c.bbox_north == 45.3936
+
+
+def test_geocode_place_returns_candidates(monkeypatch):
+    import httpx
+    from unittest.mock import MagicMock
+
+    geocode_place = _register_and_get("geocode_place")
+
+    fake_response = MagicMock()
+    fake_response.raise_for_status = MagicMock()
+    fake_response.json.return_value = [
+        {
+            "display_name": "Mount Hood, Hood River County, Oregon, United States",
+            "lat": "45.3736",
+            "lon": "-121.6959",
+            "type": "peak",
+            "boundingbox": ["45.3536", "45.3936", "-121.7159", "-121.6759"],
+        },
+        {
+            "display_name": "Mount Hood Meadows, Clackamas County, Oregon, United States",
+            "lat": "45.3300",
+            "lon": "-121.6660",
+            "type": "resort",
+            "boundingbox": ["45.3200", "45.3400", "-121.6760", "-121.6560"],
+        },
+    ]
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **kw: fake_response)
+
+    result = geocode_place(query="Mount Hood")
+    assert "1." in result
+    assert "2." in result
+    assert "45.3736" in result
+    assert "peak" in result
+
+
+def test_geocode_place_no_results(monkeypatch):
+    import httpx
+    from unittest.mock import MagicMock
+
+    geocode_place = _register_and_get("geocode_place")
+
+    fake_response = MagicMock()
+    fake_response.raise_for_status = MagicMock()
+    fake_response.json.return_value = []
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **kw: fake_response)
+
+    result = geocode_place(query="xyzzy_nowhere_12345")
+    assert "no locations found" in result.lower()
+
+
+def test_geocode_place_network_error(monkeypatch):
+    import httpx
+
+    geocode_place = _register_and_get("geocode_place")
+
+    def raise_error(*a, **kw):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(httpx, "get", raise_error)
+
+    result = geocode_place(query="Mount Hood")
+    assert "error" in result.lower()
+
+
+def test_geocode_place_limit_clamped(monkeypatch):
+    import httpx
+    from unittest.mock import MagicMock
+
+    geocode_place = _register_and_get("geocode_place")
+
+    fake_response = MagicMock()
+    fake_response.raise_for_status = MagicMock()
+    fake_response.json.return_value = []
+
+    captured = {}
+
+    def fake_get(url, **kwargs):
+        captured["params"] = kwargs.get("params", {})
+        return fake_response
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    geocode_place(query="test", limit=99)
+    assert captured["params"]["limit"] <= 10
+
+    geocode_place(query="test", limit=0)
+    assert captured["params"]["limit"] >= 1

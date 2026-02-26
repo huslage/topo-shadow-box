@@ -38,3 +38,4 @@ async def test_mcp_server_exposes_expected_tools():
         assert "fetch_elevation" in tool_names
         assert "generate_model" in tool_names
         assert "export_3mf" in tool_names
+        assert "geocode_place" in tool_names
