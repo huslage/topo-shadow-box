@@ -25,6 +25,20 @@ _Note_: Requires [uv](https://docs.astral.sh/uv/) to install Python dependencies
 
 The MCP server starts automatically when you install the plugin.
 
+## Permissions
+
+The first time Claude calls each tool, it will ask for permission. Click **"Allow always"** (not "Allow") so the approval is saved and you won't be asked again.
+
+If you'd rather pre-approve everything upfront, add this to your `~/.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "allow": ["mcp__plugin_topo-shadow-box_topo-shadow-box__*"]
+  }
+}
+```
+
 ## Example Agent Conversations
 
 These show how to prompt Claude (or any MCP-capable agent) to generate a shadow box. The agent calls the tools automatically — you just describe what you want.
