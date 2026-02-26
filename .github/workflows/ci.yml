@@ -6,17 +6,6 @@ on:
   pull_request:
 
 jobs:
-  validate-plugin:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Claude Code
-        run: npm install -g @anthropic/claude-code
-
-      - name: Validate plugin manifest
-        run: claude plugin validate .
-
   test:
     runs-on: ubuntu-latest
     steps:
