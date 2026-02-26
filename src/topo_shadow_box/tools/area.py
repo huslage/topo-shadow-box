@@ -13,6 +13,25 @@ from ..core.models import OsmFeatureSet
 from ..models import GeocodeCandidate
 
 
+def _set_area_from_candidate(candidate: GeocodeCandidate) -> Bounds:
+    """Set session area bounds from a geocode candidate and clear downstream state."""
+    bounds = Bounds(
+        north=candidate.bbox_north,
+        south=candidate.bbox_south,
+        east=candidate.bbox_east,
+        west=candidate.bbox_west,
+        is_set=True,
+    )
+    state.bounds = bounds
+    state.pending_geocode_candidates = []
+    state.elevation = ElevationData()
+    state.features = OsmFeatureSet()
+    state.terrain_mesh = None
+    state.feature_meshes = []
+    state.gpx_mesh = None
+    return bounds
+
+
 def register_area_tools(mcp: FastMCP):
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
@@ -151,18 +170,19 @@ def register_area_tools(mcp: FastMCP):
             return "Warnings: " + " | ".join(warnings)
         return "Area looks good."
 
-    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
     def geocode_place(query: str, limit: int = 5) -> str:
-        """Search for a place by name and return candidate locations with coordinates.
+        """Search for a place by name and set the area of interest.
 
         Use this when the user provides a place name but no coordinates or GPX file.
         If the user provides a GPX file, use set_area_from_gpx instead — no geocoding needed.
 
-        Returns a numbered list of candidates stored in session state.
-        Present them to the user and wait for them to choose a number.
+        - 1 result: area is set automatically, no further action needed.
+        - 2+ results: raises an error with a numbered list. Present it to the user,
+          wait for them to reply with a number, then call select_geocode_result.
 
-        **Next:** select_geocode_result with the number the user chooses. Do NOT call
-        set_area_from_coordinates directly — the user must pick a candidate first.
+        **Next (1 result):** fetch_elevation directly.
+        **Next (2+ results):** select_geocode_result with the user's chosen number.
 
         Args:
             query: Place name to search for (e.g., "Mount Hood", "Grand Canyon", "Portland, Oregon").
@@ -204,6 +224,17 @@ def register_area_tools(mcp: FastMCP):
                 )
             )
 
+        # Single result: auto-select without requiring user input
+        if len(candidates) == 1:
+            c = candidates[0]
+            bounds = _set_area_from_candidate(c)
+            return (
+                f"Found 1 result: '{c.display_name}' (auto-selected). "
+                f"Area set: N={bounds.north:.6f}, S={bounds.south:.6f}, "
+                f"E={bounds.east:.6f}, W={bounds.west:.6f} "
+                f"(~{bounds.lat_range * 111_000:.0f}m x {bounds.lon_range * 111_000:.0f}m)"
+            )
+
         state.pending_geocode_candidates = candidates
 
         lines = [f"Found {len(candidates)} location(s) for '{query}':\n"]
@@ -215,23 +246,24 @@ def register_area_tools(mcp: FastMCP):
                 f"E={c.bbox_east:.5f}, W={c.bbox_west:.5f}"
             )
         lines.append(
-            f"\nAsk the user which number (1–{len(candidates)}) they want, "
-            "then call select_geocode_result with that number."
+            f"\nUser input required: ask the user which number (1–{len(candidates)}) "
+            "they want, then call select_geocode_result with that number."
         )
-        return "\n".join(lines)
+        raise ValueError("\n".join(lines))
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
     def select_geocode_result(number: int) -> str:
         """Select a geocode candidate by number and set it as the area of interest.
 
-        Call this after geocode_place, using the number the user chose.
-        Sets the area bounds from the candidate's bounding box.
+        Only call this after geocode_place returned multiple candidates AND the user
+        has replied with their chosen number. Single results are auto-selected by
+        geocode_place — do not call this in that case.
 
-        **Requires:** geocode_place called first (candidates stored in session).
+        **Requires:** geocode_place called first with multiple results (candidates stored in session).
         **Next:** fetch_elevation, then fetch_features (optional), then generate_model.
 
         Args:
-            number: 1-based index of the candidate to select.
+            number: 1-based index of the candidate the user selected.
         """
         if not state.pending_geocode_candidates:
             return "Error: No geocode search results pending. Call geocode_place first."
@@ -241,21 +273,7 @@ def register_area_tools(mcp: FastMCP):
             return f"Error: Invalid selection {number}. Choose a number between 1 and {n}."
 
         candidate = state.pending_geocode_candidates[number - 1]
-        state.pending_geocode_candidates = []
-
-        bounds = Bounds(
-            north=candidate.bbox_north,
-            south=candidate.bbox_south,
-            east=candidate.bbox_east,
-            west=candidate.bbox_west,
-            is_set=True,
-        )
-        state.bounds = bounds
-        state.elevation = ElevationData()
-        state.features = OsmFeatureSet()
-        state.terrain_mesh = None
-        state.feature_meshes = []
-        state.gpx_mesh = None
+        bounds = _set_area_from_candidate(candidate)
 
         return (
             f"Area set from '{candidate.display_name}': "
