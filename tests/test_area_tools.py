@@ -198,3 +198,119 @@ def test_geocode_place_limit_clamped(monkeypatch):
 
     geocode_place(query="test", limit=0)
     assert captured["params"]["limit"] >= 1
+
+
+FAKE_GEOCODE_RESULTS = [
+    {
+        "display_name": "Mount Hood, Hood River County, Oregon, United States",
+        "lat": "45.3736",
+        "lon": "-121.6959",
+        "type": "peak",
+        "boundingbox": ["45.3536", "45.3936", "-121.7159", "-121.6759"],
+    },
+    {
+        "display_name": "Mount Hood Meadows, Clackamas County, Oregon, United States",
+        "lat": "45.3300",
+        "lon": "-121.6660",
+        "type": "resort",
+        "boundingbox": ["45.3200", "45.3400", "-121.6760", "-121.6560"],
+    },
+]
+
+
+def _make_fake_geocode_response(results=None):
+    from unittest.mock import MagicMock
+    fake = MagicMock()
+    fake.raise_for_status = MagicMock()
+    fake.json.return_value = results if results is not None else FAKE_GEOCODE_RESULTS
+    return fake
+
+
+def test_geocode_place_stores_candidates_in_state(monkeypatch):
+    import httpx
+
+    geocode_place = _register_and_get("geocode_place")
+    state.pending_geocode_candidates = []
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **kw: _make_fake_geocode_response())
+
+    geocode_place(query="Mount Hood")
+
+    assert len(state.pending_geocode_candidates) == 2
+    assert state.pending_geocode_candidates[0].lat == 45.3736
+    assert state.pending_geocode_candidates[1].place_type == "resort"
+
+
+def test_select_geocode_result_sets_area_from_bbox(monkeypatch):
+    import httpx
+
+    geocode_place = _register_and_get("geocode_place")
+    select_geocode_result = _register_and_get("select_geocode_result")
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **kw: _make_fake_geocode_response())
+    geocode_place(query="Mount Hood")
+
+    result = select_geocode_result(number=1)
+
+    assert "area set" in result.lower()
+    assert state.bounds.is_set
+    assert abs(state.bounds.north - 45.3936) < 0.001
+    assert abs(state.bounds.south - 45.3536) < 0.001
+    assert abs(state.bounds.east - (-121.6759)) < 0.001
+    assert abs(state.bounds.west - (-121.7159)) < 0.001
+
+
+def test_select_geocode_result_clears_pending_candidates(monkeypatch):
+    import httpx
+
+    geocode_place = _register_and_get("geocode_place")
+    select_geocode_result = _register_and_get("select_geocode_result")
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **kw: _make_fake_geocode_response())
+    geocode_place(query="Mount Hood")
+
+    select_geocode_result(number=2)
+
+    assert state.pending_geocode_candidates == []
+
+
+def test_select_geocode_result_number_too_high_returns_error(monkeypatch):
+    import httpx
+    from topo_shadow_box.state import Bounds
+
+    geocode_place = _register_and_get("geocode_place")
+    select_geocode_result = _register_and_get("select_geocode_result")
+
+    state.bounds = Bounds()  # reset
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **kw: _make_fake_geocode_response())
+    geocode_place(query="Mount Hood")
+
+    result = select_geocode_result(number=99)
+
+    assert "error" in result.lower()
+    assert state.bounds.is_set is False
+
+
+def test_select_geocode_result_number_zero_returns_error(monkeypatch):
+    import httpx
+
+    geocode_place = _register_and_get("geocode_place")
+    select_geocode_result = _register_and_get("select_geocode_result")
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **kw: _make_fake_geocode_response())
+    geocode_place(query="Mount Hood")
+
+    result = select_geocode_result(number=0)
+
+    assert "error" in result.lower()
+
+
+def test_select_geocode_result_no_pending_candidates_returns_error():
+    select_geocode_result = _register_and_get("select_geocode_result")
+    state.pending_geocode_candidates = []
+
+    result = select_geocode_result(number=1)
+
+    assert "error" in result.lower()
+    assert "geocode" in result.lower() or "search" in result.lower()

@@ -25,6 +25,9 @@ htmlcov/
 .mypy_cache/
 .pyright/
 
+# Claude Code
+.claude/settings.local.json
+
 # Editor
 .vscode/
 .idea/
