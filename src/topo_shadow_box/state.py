@@ -10,7 +10,7 @@ import numpy as np
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
 from topo_shadow_box.core.models import OsmFeatureSet
-from topo_shadow_box.models import GpxTrack, GpxWaypoint
+from topo_shadow_box.models import GpxTrack, GpxWaypoint, GeocodeCandidate
 
 
 class Bounds(BaseModel):
@@ -124,6 +124,7 @@ class SessionState(BaseModel):
     gpx_waypoints: list[GpxWaypoint] = []
     model_params: ModelParams = Field(default_factory=ModelParams)
     colors: Colors = Field(default_factory=Colors)
+    pending_geocode_candidates: list[GeocodeCandidate] = []
     terrain_mesh: Optional[MeshData] = None
     feature_meshes: list[MeshData] = []
     gpx_mesh: Optional[MeshData] = None

@@ -158,10 +158,11 @@ def register_area_tools(mcp: FastMCP):
         Use this when the user provides a place name but no coordinates or GPX file.
         If the user provides a GPX file, use set_area_from_gpx instead — no geocoding needed.
 
-        Returns a numbered list of candidates. Present them to the user, let them pick one,
-        then call set_area_from_coordinates with the chosen lat/lon or bounding box.
+        Returns a numbered list of candidates stored in session state.
+        Present them to the user and wait for them to choose a number.
 
-        **Next:** set_area_from_coordinates with the chosen candidate's coordinates.
+        **Next:** select_geocode_result with the number the user chooses. Do NOT call
+        set_area_from_coordinates directly — the user must pick a candidate first.
 
         Args:
             query: Place name to search for (e.g., "Mount Hood", "Grand Canyon", "Portland, Oregon").
@@ -203,6 +204,8 @@ def register_area_tools(mcp: FastMCP):
                 )
             )
 
+        state.pending_geocode_candidates = candidates
+
         lines = [f"Found {len(candidates)} location(s) for '{query}':\n"]
         for i, c in enumerate(candidates, 1):
             lines.append(
@@ -212,7 +215,51 @@ def register_area_tools(mcp: FastMCP):
                 f"E={c.bbox_east:.5f}, W={c.bbox_west:.5f}"
             )
         lines.append(
-            "\nAsk the user which location to use, then call set_area_from_coordinates "
-            "with the chosen lat/lon (and a radius_m) or the bounding box coordinates."
+            f"\nAsk the user which number (1–{len(candidates)}) they want, "
+            "then call select_geocode_result with that number."
         )
         return "\n".join(lines)
+
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+    def select_geocode_result(number: int) -> str:
+        """Select a geocode candidate by number and set it as the area of interest.
+
+        Call this after geocode_place, using the number the user chose.
+        Sets the area bounds from the candidate's bounding box.
+
+        **Requires:** geocode_place called first (candidates stored in session).
+        **Next:** fetch_elevation, then fetch_features (optional), then generate_model.
+
+        Args:
+            number: 1-based index of the candidate to select.
+        """
+        if not state.pending_geocode_candidates:
+            return "Error: No geocode search results pending. Call geocode_place first."
+
+        n = len(state.pending_geocode_candidates)
+        if number < 1 or number > n:
+            return f"Error: Invalid selection {number}. Choose a number between 1 and {n}."
+
+        candidate = state.pending_geocode_candidates[number - 1]
+        state.pending_geocode_candidates = []
+
+        bounds = Bounds(
+            north=candidate.bbox_north,
+            south=candidate.bbox_south,
+            east=candidate.bbox_east,
+            west=candidate.bbox_west,
+            is_set=True,
+        )
+        state.bounds = bounds
+        state.elevation = ElevationData()
+        state.features = OsmFeatureSet()
+        state.terrain_mesh = None
+        state.feature_meshes = []
+        state.gpx_mesh = None
+
+        return (
+            f"Area set from '{candidate.display_name}': "
+            f"N={bounds.north:.6f}, S={bounds.south:.6f}, "
+            f"E={bounds.east:.6f}, W={bounds.west:.6f} "
+            f"(~{bounds.lat_range * 111_000:.0f}m x {bounds.lon_range * 111_000:.0f}m)"
+        )
