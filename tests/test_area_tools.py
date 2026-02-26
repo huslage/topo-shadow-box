@@ -357,3 +357,36 @@ def test_geocode_place_single_result_clears_pending_candidates(monkeypatch):
     geocode_place(query="Mount Hood")
 
     assert state.pending_geocode_candidates == []
+
+
+def test_geocode_place_multiple_results_raises_exception(monkeypatch):
+    import httpx
+    import pytest
+
+    geocode_place = _register_and_get("geocode_place")
+    state.pending_geocode_candidates = []
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **kw: _make_fake_geocode_response())
+
+    with pytest.raises(Exception) as exc_info:
+        geocode_place(query="Mount Hood")
+
+    msg = str(exc_info.value)
+    assert "1." in msg
+    assert "2." in msg
+    assert "select_geocode_result" in msg
+
+
+def test_geocode_place_multiple_results_still_stores_candidates(monkeypatch):
+    import httpx
+    import pytest
+
+    geocode_place = _register_and_get("geocode_place")
+    state.pending_geocode_candidates = []
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **kw: _make_fake_geocode_response())
+
+    with pytest.raises(Exception):
+        geocode_place(query="Mount Hood")
+
+    assert len(state.pending_geocode_candidates) == 2

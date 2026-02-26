@@ -245,10 +245,10 @@ def register_area_tools(mcp: FastMCP):
                 f"E={c.bbox_east:.5f}, W={c.bbox_west:.5f}"
             )
         lines.append(
-            f"\nAsk the user which number (1–{len(candidates)}) they want, "
-            "then call select_geocode_result with that number."
+            f"\nUser input required: ask the user which number (1–{len(candidates)}) "
+            "they want, then call select_geocode_result with that number."
         )
-        return "\n".join(lines)
+        raise ValueError("\n".join(lines))
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
     def select_geocode_result(number: int) -> str:
