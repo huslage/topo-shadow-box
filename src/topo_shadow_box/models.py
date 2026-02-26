@@ -60,7 +60,7 @@ class GeocodeCandidate(BaseModel):
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
     place_type: str
-    bbox_north: float
-    bbox_south: float
-    bbox_east: float
-    bbox_west: float
+    bbox_north: float = Field(ge=-90, le=90)
+    bbox_south: float = Field(ge=-90, le=90)
+    bbox_east: float = Field(ge=-180, le=180)
+    bbox_west: float = Field(ge=-180, le=180)
