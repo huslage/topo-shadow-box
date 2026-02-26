@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,17 +50,54 @@ jobs:
           p.write_text(json.dumps(data, indent=2) + '\n')
           "
 
-      - name: Commit and tag
+      - name: Create PR for version bump
         run: |
           VERSION="${{ github.event.inputs.version }}"
+          BRANCH="release/v$VERSION"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
           git add pyproject.toml .claude-plugin/plugin.json .claude-plugin/marketplace.json
           git commit -m "chore: release v$VERSION"
-          git tag "v$VERSION"
-          git push origin HEAD:main "v$VERSION"
-
-      - name: Create GitHub Release
-        run: gh release create "v${{ github.event.inputs.version }}" --generate-notes
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "chore: release v$VERSION" \
+            --body "Automated version bump for v$VERSION release." \
+            --base main \
+            --head "$BRANCH"
+          gh pr merge "$BRANCH" --squash --auto --delete-branch
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for PR to merge
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          BRANCH="release/v$VERSION"
+          echo "Waiting for release/v$VERSION PR to merge..."
+          for i in $(seq 1 20); do
+            STATUS=$(gh pr view "$BRANCH" --json state -q '.state' 2>/dev/null || echo "NOTFOUND")
+            if [ "$STATUS" = "MERGED" ]; then
+              echo "PR merged."
+              break
+            fi
+            echo "  attempt $i: state=$STATUS, waiting 15s..."
+            sleep 15
+          done
+          if [ "$STATUS" != "MERGED" ]; then
+            echo "Error: PR did not merge within timeout."
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag and release
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          git fetch origin main
+          git checkout main
+          git pull
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+          gh release create "v$VERSION" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
