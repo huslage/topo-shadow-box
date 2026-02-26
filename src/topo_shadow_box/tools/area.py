@@ -10,6 +10,7 @@ from ..state import state, Bounds, ElevationData
 from ..core.gpx import parse_gpx_file
 from ..core.coords import add_padding_to_bounds
 from ..core.models import OsmFeatureSet
+from ..models import GeocodeCandidate
 
 
 def register_area_tools(mcp: FastMCP):
@@ -182,8 +183,6 @@ def register_area_tools(mcp: FastMCP):
 
         if not results:
             return f"No locations found for '{query}'. Try a more specific name or add a region (e.g., 'Portland, Oregon')."
-
-        from ..models import GeocodeCandidate
 
         candidates = []
         for item in results:
