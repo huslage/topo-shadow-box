@@ -49,26 +49,31 @@ jobs:
             goos: linux
             goarch: amd64
             ext: ""
+            smoke: true
           - os: ubuntu-latest
             runner: ubuntu-24.04-arm
             goos: linux
             goarch: arm64
             ext: ""
+            smoke: true
           - os: windows-latest
             runner: windows-latest
             goos: windows
             goarch: amd64
             ext: ".exe"
-          - os: macos-13
-            runner: macos-13
+            smoke: true
+          - os: macos-latest
+            runner: macos-14
             goos: darwin
             goarch: amd64
             ext: ""
+            smoke: false
           - os: macos-14
             runner: macos-14
             goos: darwin
             goarch: arm64
             ext: ""
+            smoke: true
     runs-on: ${{ matrix.runner }}
     defaults:
       run:
@@ -91,7 +96,7 @@ jobs:
             go build -trimpath -ldflags="-s -w" -o "dist/$BIN" ./cmd/topo-shadow-box
 
       - name: Smoke test (unix)
-        if: runner.os != 'Windows'
+        if: matrix.smoke && runner.os != 'Windows'
         shell: bash
         run: |
           BIN="topo-shadow-box-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
@@ -114,11 +119,11 @@ jobs:
           fi
 
       - name: Smoke test (windows)
-        if: runner.os == 'Windows'
+        if: matrix.smoke && runner.os == 'Windows'
         shell: pwsh
         run: |
           $bin = "dist\\topo-shadow-box-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
-          $output = & $bin 2>&1
+          $output = cmd /c $bin 2>&1
           $exitCode = $LASTEXITCODE
 
           if ($exitCode -ne 1) {
