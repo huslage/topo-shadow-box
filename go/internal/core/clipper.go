@@ -318,8 +318,17 @@ func (c *RectangleClipper) ClipPolygon(pts [][2]float64) [][2]float64 {
 func (c *RectangleClipper) ProjectToBoundary(x, z float64) (float64, float64) {
 	dx := x - c.cx
 	dz := z - c.cz
-	rx := math.Abs(dx) / c.halfWidth
-	rz := math.Abs(dz) / c.halfHeight
+	// Guard against zero dimensions — treat as square with side 1 if degenerate.
+	hw := c.halfWidth
+	hh := c.halfHeight
+	if hw <= 0 {
+		hw = 1
+	}
+	if hh <= 0 {
+		hh = 1
+	}
+	rx := math.Abs(dx) / hw
+	rz := math.Abs(dz) / hh
 	if rx >= rz {
 		if dx >= 0 {
 			return c.cx + c.halfWidth, z
