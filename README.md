@@ -39,6 +39,55 @@ If you'd rather pre-approve everything upfront, add this to your `~/.claude/sett
 }
 ```
 
+## CLI Usage
+
+The `topo-shadow-box` binary can also be used directly from the command line without an MCP session:
+
+```bash
+# Circular area → 3MF
+topo-shadow-box --lat 35.99 --lon -78.90 --radius 5000 --output durham.3mf
+
+# Bounding box → OpenSCAD
+topo-shadow-box --north 36.1 --south 35.9 --east -78.8 --west -79.0 --output area.scad
+
+# GPX file → SVG map insert
+topo-shadow-box --gpx morning_ride.gpx --output ride.svg
+
+# Custom options
+topo-shadow-box --lat 35.99 --lon -78.90 --radius 5000 \
+  --output model.3mf \
+  --width 150 --vertical-scale 2.0 --shape circle \
+  --features roads,water \
+  --color-terrain "#8B7355"
+```
+
+### CLI Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--lat`, `--lon`, `--radius` | — | Circular area (meters) |
+| `--north`, `--south`, `--east`, `--west` | — | Bounding box |
+| `--gpx` | — | Path to GPX file |
+| `--output` / `-o` | — | Output file (.3mf, .scad, or .svg) |
+| `--width` | 200 | Model width in mm |
+| `--vertical-scale` | 1.5 | Elevation exaggeration |
+| `--base-height` | 10 | Base thickness in mm |
+| `--shape` | square | square / circle / hexagon / rectangle |
+| `--resolution` | 200 | Grid points per axis |
+| `--features` | roads,water,buildings | OSM features to include |
+| `--color-terrain` | #C8A882 | Terrain color (#RRGGBB) |
+| `--color-roads` | #D4C5A9 | Roads color |
+| `--color-water` | #4682B4 | Water color |
+| `--color-buildings` | #E8D5B7 | Buildings color |
+| `--color-gpx-track` | #FF0000 | GPX track color |
+
+Input methods are mutually exclusive. Exactly one of `--lat/--lon/--radius`, `--north/--south/--east/--west`, or `--gpx` must be provided. `--output` is always required.
+
+To start the MCP server (for Claude Code integration):
+```bash
+topo-shadow-box serve
+```
+
 ## Example Agent Conversations
 
 These show how to prompt Claude (or any MCP-capable agent) to generate a shadow box. The agent calls the tools automatically — you just describe what you want.
