@@ -6,22 +6,29 @@ on:
   pull_request:
 
 jobs:
-  test:
+  go-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: go
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
 
-      - name: Set up Python 3.11
-        run: uv python install 3.11
+      - name: Go fmt check
+        run: |
+          test -z "$(gofmt -l .)" || (echo "Run gofmt on these files:" && gofmt -l . && exit 1)
 
-      - name: Install dependencies
-        run: uv sync --dev
+      - name: Go vet
+        run: go vet ./...
 
-      - name: Lint with ruff
-        run: uv run ruff check src/ tests/
+      - name: Go test
+        run: go test ./...
 
-      - name: Run tests
-        run: uv run pytest
+      - name: Go build
+        run: go build ./cmd/topo-shadow-box

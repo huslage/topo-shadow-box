@@ -1,12 +1,18 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/huslage/topo-shadow-box/internal/core"
+	"github.com/huslage/topo-shadow-box/internal/exporters"
+	"github.com/huslage/topo-shadow-box/internal/session"
 )
 
 type cliFlags struct {
@@ -176,6 +182,81 @@ func runCLI(args []string) error {
 	if err != nil {
 		return err
 	}
-	_ = f
-	return nil // pipeline wired in later tasks
+	if err := validateFlags(f); err != nil {
+		return err
+	}
+	return executeCLI(f)
+}
+
+func executeCLI(f cliFlags) error {
+	format, err := inferFormat(f.output)
+	if err != nil {
+		return err
+	}
+	features, err := parseFeatures(f.features)
+	if err != nil {
+		return err
+	}
+
+	sess := session.New()
+	ctx := context.Background()
+
+	sess.Config.ModelParams.WidthMM = f.width
+	sess.Config.ModelParams.VerticalScale = f.verticalScale
+	sess.Config.ModelParams.BaseHeightMM = f.baseHeight
+	sess.Config.ModelParams.Shape = f.shape
+
+	sess.Config.Colors.Terrain = f.colorTerrain
+	sess.Config.Colors.Roads = f.colorRoads
+	sess.Config.Colors.Water = f.colorWater
+	sess.Config.Colors.Buildings = f.colorBuildings
+	sess.Config.Colors.GpxTrack = f.colorGpxTrack
+
+	fmt.Fprintln(os.Stderr, "Setting area...")
+	switch {
+	case f.gpx != "":
+		if err := core.SetAreaFromGPX(ctx, sess, f.gpx, 500); err != nil {
+			return fmt.Errorf("set area from GPX: %w", err)
+		}
+	case f.radius > 0:
+		if err := core.SetAreaFromCoordinates(ctx, sess, f.lat, f.lon, f.radius); err != nil {
+			return fmt.Errorf("set area from coordinates: %w", err)
+		}
+	default:
+		if err := core.SetAreaFromBbox(ctx, sess, f.north, f.south, f.east, f.west); err != nil {
+			return fmt.Errorf("set area from bounding box: %w", err)
+		}
+	}
+
+	fmt.Fprintln(os.Stderr, "Fetching elevation...")
+	if err := core.FetchElevation(ctx, sess, f.resolution); err != nil {
+		return fmt.Errorf("fetch elevation: %w", err)
+	}
+
+	if len(features) > 0 {
+		fmt.Fprintln(os.Stderr, "Fetching map features...")
+		if err := core.FetchFeatures(ctx, sess, features); err != nil {
+			return fmt.Errorf("fetch features: %w", err)
+		}
+	}
+
+	fmt.Fprintln(os.Stderr, "Generating model...")
+	if err := core.GenerateModel(ctx, sess); err != nil {
+		return fmt.Errorf("generate model: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Exporting to %s...\n", f.output)
+	switch format {
+	case "3mf":
+		err = exporters.Export3MF(sess, f.output)
+	case "openscad":
+		err = exporters.ExportOpenSCAD(sess, f.output)
+	case "svg":
+		err = exporters.ExportSVG(sess, f.output)
+	}
+	if err != nil {
+		return fmt.Errorf("export: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "Done: %s\n", f.output)
+	return nil
 }

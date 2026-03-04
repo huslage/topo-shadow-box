@@ -1,29 +1,5 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.so
-*.egg
-*.egg-info/
 dist/
 build/
-.eggs/
-
-# Virtual environments
-.venv/
-venv/
-env/
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-
-# Type checking
-.mypy_cache/
-.pyright/
 
 # Claude Code
 .claude/settings.local.json
