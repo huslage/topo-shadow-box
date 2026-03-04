@@ -125,3 +125,92 @@ func TestParseFlagsNotSetCoordsSentinel(t *testing.T) {
 		t.Errorf("lon should be NaN when not set, got %v", f.lon)
 	}
 }
+
+func TestValidateFlagsMissingOutput(t *testing.T) {
+	f := cliFlags{lat: 35.99, lon: -78.90, radius: 5000, north: math.NaN(), south: math.NaN(), east: math.NaN(), west: math.NaN()}
+	err := validateFlags(f)
+	if err == nil || err.Error() != "--output is required" {
+		t.Errorf("got %v, want '--output is required'", err)
+	}
+}
+
+func TestValidateFlagsNoInput(t *testing.T) {
+	f := cliFlags{output: "out.3mf", lat: math.NaN(), lon: math.NaN(), north: math.NaN(), south: math.NaN(), east: math.NaN(), west: math.NaN()}
+	err := validateFlags(f)
+	if err == nil {
+		t.Error("expected error for no input method, got nil")
+	}
+}
+
+func TestValidateFlagsMutualExclusion(t *testing.T) {
+	f := cliFlags{lat: 35.99, lon: -78.90, radius: 5000, gpx: "ride.gpx", output: "out.3mf",
+		north: math.NaN(), south: math.NaN(), east: math.NaN(), west: math.NaN()}
+	err := validateFlags(f)
+	if err == nil {
+		t.Error("expected error for multiple input methods, got nil")
+	}
+}
+
+func TestValidateFlagsCoordsMissingRadius(t *testing.T) {
+	f := cliFlags{lat: 35.99, lon: -78.90, radius: 0, output: "out.3mf",
+		north: math.NaN(), south: math.NaN(), east: math.NaN(), west: math.NaN()}
+	err := validateFlags(f)
+	if err == nil {
+		t.Error("expected error for lat/lon without radius, got nil")
+	}
+}
+
+func TestValidateFlagsInvalidShape(t *testing.T) {
+	f := cliFlags{lat: 35.99, lon: -78.90, radius: 5000, output: "out.3mf", shape: "triangle",
+		north: math.NaN(), south: math.NaN(), east: math.NaN(), west: math.NaN(),
+		colorTerrain: "#C8A882", colorRoads: "#D4C5A9", colorWater: "#4682B4",
+		colorBuildings: "#E8D5B7", colorGpxTrack: "#FF0000"}
+	err := validateFlags(f)
+	if err == nil {
+		t.Error("expected error for invalid shape, got nil")
+	}
+}
+
+func TestValidateFlagsInvalidColor(t *testing.T) {
+	f := cliFlags{lat: 35.99, lon: -78.90, radius: 5000, output: "out.3mf", shape: "square",
+		north: math.NaN(), south: math.NaN(), east: math.NaN(), west: math.NaN(),
+		colorTerrain: "not-a-color", colorRoads: "#D4C5A9", colorWater: "#4682B4",
+		colorBuildings: "#E8D5B7", colorGpxTrack: "#FF0000"}
+	err := validateFlags(f)
+	if err == nil {
+		t.Error("expected error for invalid color, got nil")
+	}
+}
+
+func TestValidateFlagsValid(t *testing.T) {
+	f := cliFlags{lat: 35.99, lon: -78.90, radius: 5000, output: "out.3mf",
+		north: math.NaN(), south: math.NaN(), east: math.NaN(), west: math.NaN(),
+		shape: "square", features: "roads,water,buildings",
+		colorTerrain: "#C8A882", colorRoads: "#D4C5A9",
+		colorWater: "#4682B4", colorBuildings: "#E8D5B7", colorGpxTrack: "#FF0000"}
+	if err := validateFlags(f); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateFlagsValidGPX(t *testing.T) {
+	f := cliFlags{gpx: "ride.gpx", output: "out.3mf",
+		lat: math.NaN(), lon: math.NaN(), north: math.NaN(), south: math.NaN(), east: math.NaN(), west: math.NaN(),
+		shape: "square", features: "roads,water,buildings",
+		colorTerrain: "#C8A882", colorRoads: "#D4C5A9",
+		colorWater: "#4682B4", colorBuildings: "#E8D5B7", colorGpxTrack: "#FF0000"}
+	if err := validateFlags(f); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateFlagsValidBbox(t *testing.T) {
+	f := cliFlags{north: 36.1, south: 35.9, east: -78.8, west: -79.0, output: "out.3mf",
+		lat: math.NaN(), lon: math.NaN(),
+		shape: "square", features: "roads,water,buildings",
+		colorTerrain: "#C8A882", colorRoads: "#D4C5A9",
+		colorWater: "#4682B4", colorBuildings: "#E8D5B7", colorGpxTrack: "#FF0000"}
+	if err := validateFlags(f); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}

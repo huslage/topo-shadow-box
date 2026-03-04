@@ -2,7 +2,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"math"
+	"regexp"
 )
 
 type cliFlags struct {
@@ -70,6 +72,72 @@ func parseFlags(args []string) (cliFlags, error) {
 		return cliFlags{}, err
 	}
 	return f, nil
+}
+
+var validShapes = map[string]bool{"square": true, "circle": true, "hexagon": true, "rectangle": true}
+var hexColorRe = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+
+func validateFlags(f cliFlags) error {
+	if f.output == "" {
+		return fmt.Errorf("--output is required")
+	}
+
+	hasCoords := !math.IsNaN(f.lat) || !math.IsNaN(f.lon) || f.radius != 0
+	hasBbox := !math.IsNaN(f.north) || !math.IsNaN(f.south) || !math.IsNaN(f.east) || !math.IsNaN(f.west)
+	hasGPX := f.gpx != ""
+
+	inputCount := 0
+	if hasCoords {
+		inputCount++
+	}
+	if hasBbox {
+		inputCount++
+	}
+	if hasGPX {
+		inputCount++
+	}
+
+	if inputCount == 0 {
+		return fmt.Errorf("one of --lat/--lon/--radius, --north/--south/--east/--west, or --gpx is required")
+	}
+	if inputCount > 1 {
+		return fmt.Errorf("--lat/--lon/--radius, --north/--south/--east/--west, and --gpx are mutually exclusive")
+	}
+
+	if hasCoords {
+		if math.IsNaN(f.lat) || math.IsNaN(f.lon) || f.radius <= 0 {
+			return fmt.Errorf("--lat, --lon, and --radius must all be provided and radius must be positive")
+		}
+	}
+	if hasBbox {
+		if math.IsNaN(f.north) || math.IsNaN(f.south) || math.IsNaN(f.east) || math.IsNaN(f.west) {
+			return fmt.Errorf("--north, --south, --east, and --west must all be provided together")
+		}
+		if f.north <= f.south {
+			return fmt.Errorf("--north must be greater than --south")
+		}
+		if f.east <= f.west {
+			return fmt.Errorf("--east must be greater than --west")
+		}
+	}
+
+	if !validShapes[f.shape] {
+		return fmt.Errorf("invalid --shape %q: must be square, circle, hexagon, or rectangle", f.shape)
+	}
+
+	for name, color := range map[string]string{
+		"--color-terrain":   f.colorTerrain,
+		"--color-roads":     f.colorRoads,
+		"--color-water":     f.colorWater,
+		"--color-buildings": f.colorBuildings,
+		"--color-gpx-track": f.colorGpxTrack,
+	} {
+		if !hexColorRe.MatchString(color) {
+			return fmt.Errorf("%s must be in #RRGGBB format, got %q", name, color)
+		}
+	}
+
+	return nil
 }
 
 func runCLI(args []string) error {
