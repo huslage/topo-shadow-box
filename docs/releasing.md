@@ -1,28 +1,31 @@
 # Releasing
 
-Releases are created via GitHub Actions. The workflow bumps the version in all required files, commits, tags, and publishes the GitHub Release in one step.
+Releases are built from Git tags and publish cross-platform Go binaries.
 
 ## Cut a release
 
+Create and push a semantic version tag:
+
 ```bash
-gh workflow run release.yml -f version=1.2.0
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
-Or from the GitHub UI: **Actions → Release → Run workflow**, enter the version.
+Or run the Release workflow manually in GitHub Actions and provide `1.2.0`.
 
-The version must be in `X.Y.Z` format. The workflow will:
+## What the Release workflow does
 
-1. Update `pyproject.toml`, `.claude-plugin/plugin.json`, and `.claude-plugin/marketplace.json`
-2. Commit the changes to `main`
-3. Tag the commit as `vX.Y.Z`
-4. Create a GitHub Release with auto-generated notes
+1. Builds `topo-shadow-box` for:
+   - macOS (`amd64`, `arm64`)
+   - Linux (`amd64`, `arm64`)
+   - Windows (`amd64`)
+2. Packages archives (`.tar.gz` on Unix, `.zip` on Windows)
+3. Publishes/updates the GitHub Release for tag `vX.Y.Z`
+4. Uploads all binary archives as release assets
 
-## What the version bump affects
+## Version metadata
 
-| File | Field |
-|------|-------|
-| `pyproject.toml` | `version` |
-| `.claude-plugin/plugin.json` | `version` |
-| `.claude-plugin/marketplace.json` | `plugins[].version` |
+If you're incrementing plugin metadata for marketplace visibility, update:
 
-The `plugin.json` version is what Claude Code uses to detect updates. Users with the plugin installed will be offered the update automatically when the version changes.
+- `.claude-plugin/plugin.json` -> `version`
+- `.claude-plugin/marketplace.json` -> `plugins[].version`

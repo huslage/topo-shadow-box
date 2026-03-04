@@ -1,15 +1,18 @@
 # Development
 
 ```bash
-# Install dev dependencies
-uv sync
+# Run all Go tests
+cd go
+go test ./...
 
-# Run all tests
-.venv/bin/pytest
+# Run package tests
+cd go
+go test ./internal/core/...
 
-# Run a specific test file
-.venv/bin/pytest tests/test_mesh.py
+# Build local binary
+cd go
+go build -o /tmp/topo-shadow-box ./cmd/topo-shadow-box
 
-# Run a specific test
-.venv/bin/pytest tests/test_mesh.py::TestCreateRoadStrip::test_basic_strip
+# Start MCP server
+/tmp/topo-shadow-box serve
 ```
