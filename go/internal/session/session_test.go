@@ -1,8 +1,8 @@
 package session_test
 
 import (
-	"testing"
 	"github.com/huslage/topo-shadow-box/internal/session"
+	"testing"
 )
 
 func TestNewSession(t *testing.T) {

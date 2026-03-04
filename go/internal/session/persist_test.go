@@ -1,9 +1,9 @@
 package session_test
 
 import (
+	"github.com/huslage/topo-shadow-box/internal/session"
 	"path/filepath"
 	"testing"
-	"github.com/huslage/topo-shadow-box/internal/session"
 )
 
 func TestSaveAndLoadSession(t *testing.T) {
