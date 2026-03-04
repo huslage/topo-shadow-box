@@ -45,26 +45,31 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
+            runner: ubuntu-latest
             goos: linux
             goarch: amd64
             ext: ""
           - os: ubuntu-latest
+            runner: ubuntu-24.04-arm
             goos: linux
             goarch: arm64
             ext: ""
           - os: windows-latest
+            runner: windows-latest
             goos: windows
             goarch: amd64
             ext: ".exe"
-          - os: macos-latest
+          - os: macos-13
+            runner: macos-13
             goos: darwin
             goarch: amd64
             ext: ""
-          - os: macos-latest
+          - os: macos-14
+            runner: macos-14
             goos: darwin
             goarch: arm64
             ext: ""
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     defaults:
       run:
         working-directory: go
@@ -84,6 +89,48 @@ jobs:
           BIN="topo-shadow-box-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
             go build -trimpath -ldflags="-s -w" -o "dist/$BIN" ./cmd/topo-shadow-box
+
+      - name: Smoke test (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          BIN="topo-shadow-box-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
+          chmod +x "dist/$BIN"
+
+          set +e
+          OUTPUT=$("dist/$BIN" 2>&1)
+          EXIT_CODE=$?
+          set -e
+
+          if [ "$EXIT_CODE" -ne 1 ]; then
+            echo "Smoke test failed: expected exit code 1, got $EXIT_CODE"
+            echo "$OUTPUT"
+            exit 1
+          fi
+          if ! echo "$OUTPUT" | grep -q -- "--output is required"; then
+            echo "Smoke test failed: missing expected validation output"
+            echo "$OUTPUT"
+            exit 1
+          fi
+
+      - name: Smoke test (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bin = "dist\\topo-shadow-box-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
+          $output = & $bin 2>&1
+          $exitCode = $LASTEXITCODE
+
+          if ($exitCode -ne 1) {
+            Write-Host "Smoke test failed: expected exit code 1, got $exitCode"
+            Write-Host $output
+            exit 1
+          }
+          if ($output -notmatch "--output is required") {
+            Write-Host "Smoke test failed: missing expected validation output"
+            Write-Host $output
+            exit 1
+          }
 
       - name: Package archive
         shell: bash
