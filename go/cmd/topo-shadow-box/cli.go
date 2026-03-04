@@ -4,7 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"math"
+	"path/filepath"
 	"regexp"
+	"strings"
 )
 
 type cliFlags struct {
@@ -138,6 +140,35 @@ func validateFlags(f cliFlags) error {
 	}
 
 	return nil
+}
+
+func inferFormat(path string) (string, error) {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".3mf":
+		return "3mf", nil
+	case ".scad":
+		return "openscad", nil
+	case ".svg":
+		return "svg", nil
+	default:
+		return "", fmt.Errorf("cannot infer output format from extension %q; use .3mf, .scad, or .svg", ext)
+	}
+}
+
+var validFeatures = map[string]bool{"roads": true, "water": true, "buildings": true}
+
+func parseFeatures(s string) ([]string, error) {
+	if s == "" {
+		return nil, nil
+	}
+	parts := strings.Split(s, ",")
+	for _, p := range parts {
+		if !validFeatures[p] {
+			return nil, fmt.Errorf("invalid feature %q: must be roads, water, or buildings", p)
+		}
+	}
+	return parts, nil
 }
 
 func runCLI(args []string) error {

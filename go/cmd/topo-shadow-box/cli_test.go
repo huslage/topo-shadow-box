@@ -214,3 +214,70 @@ func TestValidateFlagsValidBbox(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
+
+func TestInferFormat(t *testing.T) {
+	tests := []struct {
+		path    string
+		want    string
+		wantErr bool
+	}{
+		{"out.3mf", "3mf", false},
+		{"model.scad", "openscad", false},
+		{"map.svg", "svg", false},
+		{"OUT.3MF", "3mf", false},
+		{"out.txt", "", true},
+		{"out", "", true},
+	}
+	for _, tt := range tests {
+		got, err := inferFormat(tt.path)
+		if tt.wantErr {
+			if err == nil {
+				t.Errorf("inferFormat(%q): expected error, got nil", tt.path)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("inferFormat(%q): unexpected error: %v", tt.path, err)
+			continue
+		}
+		if got != tt.want {
+			t.Errorf("inferFormat(%q): got %q, want %q", tt.path, got, tt.want)
+		}
+	}
+}
+
+func TestParseFeatures(t *testing.T) {
+	tests := []struct {
+		input   string
+		want    []string
+		wantErr bool
+	}{
+		{"roads,water,buildings", []string{"roads", "water", "buildings"}, false},
+		{"roads", []string{"roads"}, false},
+		{"water,buildings", []string{"water", "buildings"}, false},
+		{"", nil, false},
+		{"roads,invalid", nil, true},
+	}
+	for _, tt := range tests {
+		got, err := parseFeatures(tt.input)
+		if tt.wantErr {
+			if err == nil {
+				t.Errorf("parseFeatures(%q): expected error, got nil", tt.input)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("parseFeatures(%q): unexpected error: %v", tt.input, err)
+			continue
+		}
+		if len(got) != len(tt.want) {
+			t.Errorf("parseFeatures(%q): got %v, want %v", tt.input, got, tt.want)
+			continue
+		}
+		for i := range tt.want {
+			if got[i] != tt.want[i] {
+				t.Errorf("parseFeatures(%q)[%d]: got %q, want %q", tt.input, i, got[i], tt.want[i])
+			}
+		}
+	}
+}
