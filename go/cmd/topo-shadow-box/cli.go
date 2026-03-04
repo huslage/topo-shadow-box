@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"math"
 )
 
 type cliFlags struct {
@@ -38,17 +39,18 @@ func parseFlags(args []string) (cliFlags, error) {
 	fs := flag.NewFlagSet("topo-shadow-box", flag.ContinueOnError)
 	var f cliFlags
 
-	fs.Float64Var(&f.lat, "lat", 0, "Center latitude")
-	fs.Float64Var(&f.lon, "lon", 0, "Center longitude")
+	fs.Float64Var(&f.lat, "lat", math.NaN(), "Center latitude")
+	fs.Float64Var(&f.lon, "lon", math.NaN(), "Center longitude")
 	fs.Float64Var(&f.radius, "radius", 0, "Radius in meters")
-	fs.Float64Var(&f.north, "north", 0, "North boundary")
-	fs.Float64Var(&f.south, "south", 0, "South boundary")
-	fs.Float64Var(&f.east, "east", 0, "East boundary")
-	fs.Float64Var(&f.west, "west", 0, "West boundary")
+	fs.Float64Var(&f.north, "north", math.NaN(), "North boundary")
+	fs.Float64Var(&f.south, "south", math.NaN(), "South boundary")
+	fs.Float64Var(&f.east, "east", math.NaN(), "East boundary")
+	fs.Float64Var(&f.west, "west", math.NaN(), "West boundary")
 	fs.StringVar(&f.gpx, "gpx", "", "Path to GPX file")
 
-	fs.StringVar(&f.output, "output", "", "Output file path")
-	fs.StringVar(&f.output, "o", "", "Output file path (shorthand)")
+	const outputUsage = "Output file path (.3mf, .scad, or .svg)"
+	fs.StringVar(&f.output, "output", "", outputUsage)
+	fs.StringVar(&f.output, "o", "", outputUsage)
 
 	fs.Float64Var(&f.width, "width", 200, "Model width in mm")
 	fs.Float64Var(&f.verticalScale, "vertical-scale", 1.5, "Elevation exaggeration")
