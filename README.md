@@ -21,7 +21,7 @@ cd go
 go build -o /usr/local/bin/topo-shadow-box ./cmd/topo-shadow-box
 ```
 
-### Adding to Claude Code:
+### Adding to Claude Code
 
 ```
 /plugin marketplace add huslage/topo-shadow-box
@@ -29,6 +29,18 @@ go build -o /usr/local/bin/topo-shadow-box ./cmd/topo-shadow-box
 ```
 
 The MCP server starts automatically when you install the plugin.
+
+### Adding to Codex
+
+Add this to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.topo-shadow-box]
+command = "topo-shadow-box"
+args = ["serve"]
+```
+
+Then restart Codex.
 
 ## Permissions
 
